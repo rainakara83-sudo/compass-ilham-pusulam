@@ -1,0 +1,79 @@
+{
+  "common": {
+    "appName": "Content Coach",
+    "loading": "Wird geladen...",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "ok": "OK",
+    "back": "Zurück",
+    "refresh": "Aktualisieren",
+    "continue": "Weiter",
+    "start": "Starten"
+  },
+  "tabs": {
+    "home": "Start",
+    "explore": "Entdecken",
+    "favorites": "Favoriten",
+    "history": "Verlauf",
+    "stats": "Statistik",
+    "reminders": "Erinnerungen",
+    "qa": "Q&A",
+    "profile": "Profil",
+    "info": "Info",
+    "settings": "Einstellungen"
+  },
+  "onboarding": {
+    "title": "Willkommen!",
+    "subtitle": "Wähle deine Nische",
+    "select": "Auswählen",
+    "selected": "Ausgewählt"
+  },
+  "home": {
+    "weeklyTitle": "Diese Woche: Content-Ideen",
+    "weeklySubtitle": "{{count}} neue Ideen für dich",
+    "noIdeas": "Keine Ideen. Bitte Nische in den Einstellungen wählen.",
+    "aiRefreshing": "Neue Ideen werden generiert...",
+    "aiButton": "Mit KI aktualisieren",
+    "poolButton": "Aus dem Pool aktualisieren",
+    "monday": "Montag",
+    "wednesday": "Mittwoch",
+    "friday": "Freitag",
+    "saturday": "Samstag"
+  },
+  "reminders": {
+    "title": "Erinnerungen",
+    "addReminder": "Erinnerung hinzufügen",
+    "time": "Uhrzeit",
+    "days": "Tage",
+    "permissionDenied": "Berechtigung verweigert.",
+    "noReminders": "Noch keine Erinnerungen"
+  },
+  "qa": {
+    "title": "Fragen & Antworten",
+    "placeholder": "Stelle eine Frage zur Content-Erstellung...",
+    "send": "Senden",
+    "thinking": "Denke nach...",
+    "error": "Ein Fehler ist aufgetreten.",
+    "welcome": "Hallo! Wie kann ich dir helfen?"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "niche": "Nische",
+    "changeNiche": "Nische ändern",
+    "currentNiche": "Aktuelle Nische",
+    "tr": "Türkisch",
+    "en": "Englisch",
+    "about": "Über"
+  },
+  "niches": {
+    "fitness": "Fitness",
+    "food": "Essen",
+    "tech": "Technologie",
+    "fashion": "Mode",
+    "travel": "Reisen",
+    "gaming": "Gaming",
+    "personal_dev": "Persönliche Entwicklung",
+    "beauty": "Schönheit"
+  }
+}

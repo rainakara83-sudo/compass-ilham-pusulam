@@ -1,0 +1,10 @@
+[
+  { "id": "fitness", "icon": "💪", "color": "#FF6B6B", "description": "Antrenman, sağlıklı yaşam", "popularity": 92 },
+  { "id": "food", "icon": "🍳", "color": "#FFA94D", "description": "Yemek tarifleri, mutfak", "popularity": 88 },
+  { "id": "tech", "icon": "💻", "color": "#4D96FF", "description": "Yazılım, cihazlar, yapay zeka", "popularity": 95 },
+  { "id": "fashion", "icon": "👗", "color": "#F06595", "description": "Moda, kombin, stil", "popularity": 70 },
+  { "id": "travel", "icon": "✈️", "color": "#20C997", "description": "Seyahat, tatil, keşif", "popularity": 75 },
+  { "id": "gaming", "icon": "🎮", "color": "#845EF7", "description": "Oyunlar, e-spor, yayıncılık", "popularity": 80 },
+  { "id": "personal_dev", "icon": "📚", "color": "#FAB005", "description": "Kişisel gelişim, üretkenlik", "popularity": 65 },
+  { "id": "beauty", "icon": "💄", "color": "#E64980", "description": "Makyaj, cilt ve saç bakımı", "popularity": 78 }
+]

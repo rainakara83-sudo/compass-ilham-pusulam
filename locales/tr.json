@@ -1,0 +1,79 @@
+{
+  "common": {
+    "appName": "Content Coach",
+    "loading": "Yükleniyor...",
+    "save": "Kaydet",
+    "cancel": "İptal",
+    "ok": "Tamam",
+    "back": "Geri",
+    "refresh": "Yenile",
+    "continue": "Devam",
+    "start": "Başla"
+  },
+  "tabs": {
+    "home": "Ana Sayfa",
+    "explore": "Keşfet",
+    "favorites": "Favoriler",
+    "history": "Geçmiş",
+    "stats": "İstatistik",
+    "reminders": "Hatırlatmalar",
+    "qa": "Soru-Cevap",
+    "profile": "Profil",
+    "info": "Bilgi",
+    "settings": "Ayarlar"
+  },
+  "onboarding": {
+    "title": "Hoş geldin!",
+    "subtitle": "İçerik üreteceğin nişini seç",
+    "select": "Seç",
+    "selected": "Seçildi"
+  },
+  "home": {
+    "weeklyTitle": "Bu Haftanın İçerik Fikirleri",
+    "weeklySubtitle": "{{count}} yeni fikir senin için hazır",
+    "noIdeas": "Şu an görüntülenecek fikir yok. Lütfen ayarlardan niş seç.",
+    "aiRefreshing": "Yeni fikirler üretiliyor...",
+    "aiButton": "Yapay zeka ile yenile",
+    "poolButton": "Havuzdan yenile",
+    "monday": "Pazartesi",
+    "wednesday": "Çarşamba",
+    "friday": "Cuma",
+    "saturday": "Cumartesi"
+  },
+  "reminders": {
+    "title": "Hatırlatmalar",
+    "addReminder": "Hatırlatma Ekle",
+    "time": "Saat",
+    "days": "Günler",
+    "permissionDenied": "Bildirim izni verilmedi. Lütfen ayarlardan izin ver.",
+    "noReminders": "Henüz hatırlatma yok"
+  },
+  "qa": {
+    "title": "Soru-Cevap Asistanı",
+    "placeholder": "İçerik üretimi hakkında bir soru sor...",
+    "send": "Gönder",
+    "thinking": "Düşünüyor...",
+    "error": "Bir sorun oluştu. Lütfen tekrar deneyin.",
+    "welcome": "Merhaba! İçerik üretimi konusunda sana nasıl yardımcı olabilirim?"
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "language": "Dil",
+    "niche": "Niş",
+    "changeNiche": "Niş Değiştir",
+    "currentNiche": "Mevcut Niş",
+    "tr": "Türkçe",
+    "en": "İngilizce",
+    "about": "Hakkında"
+  },
+  "niches": {
+    "fitness": "Fitness",
+    "food": "Yemek",
+    "tech": "Teknoloji",
+    "fashion": "Moda",
+    "travel": "Seyahat",
+    "gaming": "Oyun",
+    "personal_dev": "Kişisel Gelişim",
+    "beauty": "Güzellik"
+  }
+}

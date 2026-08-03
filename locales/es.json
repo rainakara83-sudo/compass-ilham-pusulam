@@ -1,0 +1,79 @@
+{
+  "common": {
+    "appName": "Content Coach",
+    "loading": "Cargando...",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "ok": "OK",
+    "back": "Atrás",
+    "refresh": "Actualizar",
+    "continue": "Continuar",
+    "start": "Empezar"
+  },
+  "tabs": {
+    "home": "Inicio",
+    "explore": "Explorar",
+    "favorites": "Favoritos",
+    "history": "Historial",
+    "stats": "Estadísticas",
+    "reminders": "Recordatorios",
+    "qa": "Preguntas",
+    "profile": "Perfil",
+    "info": "Info",
+    "settings": "Ajustes"
+  },
+  "onboarding": {
+    "title": "¡Bienvenido!",
+    "subtitle": "Elige el nicho en el que crearás contenido",
+    "select": "Seleccionar",
+    "selected": "Seleccionado"
+  },
+  "home": {
+    "weeklyTitle": "Ideas de contenido de esta semana",
+    "weeklySubtitle": "{{count}} ideas nuevas listas para ti",
+    "noIdeas": "No hay ideas para mostrar. Elige un nicho en los ajustes.",
+    "aiRefreshing": "Generando nuevas ideas...",
+    "aiButton": "Actualizar con IA",
+    "poolButton": "Actualizar desde el banco",
+    "monday": "Lunes",
+    "wednesday": "Miércoles",
+    "friday": "Viernes",
+    "saturday": "Sábado"
+  },
+  "reminders": {
+    "title": "Recordatorios",
+    "addReminder": "Añadir recordatorio",
+    "time": "Hora",
+    "days": "Días",
+    "permissionDenied": "Permiso denegado. Actívalo en los ajustes del sistema.",
+    "noReminders": "Aún no hay recordatorios"
+  },
+  "qa": {
+    "title": "Asistente de preguntas",
+    "placeholder": "Haz una pregunta sobre creación de contenido...",
+    "send": "Enviar",
+    "thinking": "Pensando...",
+    "error": "Algo salió mal. Inténtalo de nuevo.",
+    "welcome": "¡Hola! ¿Cómo puedo ayudarte con tu creación de contenido?"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "language": "Idioma",
+    "niche": "Nicho",
+    "changeNiche": "Cambiar nicho",
+    "currentNiche": "Nicho actual",
+    "tr": "Turco",
+    "en": "Inglés",
+    "about": "Acerca de"
+  },
+  "niches": {
+    "fitness": "Fitness",
+    "food": "Comida",
+    "tech": "Tecnología",
+    "fashion": "Moda",
+    "travel": "Viajes",
+    "gaming": "Juegos",
+    "personal_dev": "Desarrollo personal",
+    "beauty": "Belleza"
+  }
+}

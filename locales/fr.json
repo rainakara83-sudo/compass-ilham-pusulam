@@ -1,0 +1,79 @@
+{
+  "common": {
+    "appName": "Content Coach",
+    "loading": "Chargement...",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "ok": "OK",
+    "back": "Retour",
+    "refresh": "Rafraîchir",
+    "continue": "Continuer",
+    "start": "Commencer"
+  },
+  "tabs": {
+    "home": "Accueil",
+    "explore": "Explorer",
+    "favorites": "Favoris",
+    "history": "Historique",
+    "stats": "Stats",
+    "reminders": "Rappels",
+    "qa": "Q&R",
+    "profile": "Profil",
+    "info": "Info",
+    "settings": "Paramètres"
+  },
+  "onboarding": {
+    "title": "Bienvenue !",
+    "subtitle": "Choisis ta niche",
+    "select": "Sélectionner",
+    "selected": "Sélectionné"
+  },
+  "home": {
+    "weeklyTitle": "Idées de contenu de la semaine",
+    "weeklySubtitle": "{{count}} nouvelles idées prêtes",
+    "noIdeas": "Aucune idée. Choisis une niche dans les paramètres.",
+    "aiRefreshing": "Génération de nouvelles idées...",
+    "aiButton": "Rafraîchir avec l'IA",
+    "poolButton": "Depuis le pool",
+    "monday": "Lundi",
+    "wednesday": "Mercredi",
+    "friday": "Vendredi",
+    "saturday": "Samedi"
+  },
+  "reminders": {
+    "title": "Rappels",
+    "addReminder": "Ajouter un rappel",
+    "time": "Heure",
+    "days": "Jours",
+    "permissionDenied": "Autorisation refusée.",
+    "noReminders": "Aucun rappel"
+  },
+  "qa": {
+    "title": "Assistant Q&R",
+    "placeholder": "Pose une question sur la création de contenu...",
+    "send": "Envoyer",
+    "thinking": "Réflexion...",
+    "error": "Une erreur est survenue.",
+    "welcome": "Bonjour ! Comment puis-je t'aider ?"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "language": "Langue",
+    "niche": "Niche",
+    "changeNiche": "Changer de niche",
+    "currentNiche": "Niche actuelle",
+    "tr": "Turc",
+    "en": "Anglais",
+    "about": "À propos"
+  },
+  "niches": {
+    "fitness": "Fitness",
+    "food": "Cuisine",
+    "tech": "Technologie",
+    "fashion": "Mode",
+    "travel": "Voyage",
+    "gaming": "Jeux",
+    "personal_dev": "Développement perso",
+    "beauty": "Beauté"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "common": {
+    "appName": "Content Coach",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "back": "Back",
+    "refresh": "Refresh",
+    "continue": "Continue",
+    "start": "Start"
+  },
+  "tabs": {
+    "home": "Home",
+    "explore": "Explore",
+    "favorites": "Favorites",
+    "history": "History",
+    "stats": "Stats",
+    "reminders": "Reminders",
+    "qa": "Q&A",
+    "profile": "Profile",
+    "info": "Info",
+    "settings": "Settings"
+  },
+  "onboarding": {
+    "title": "Welcome!",
+    "subtitle": "Pick the niche you'll create content in",
+    "select": "Select",
+    "selected": "Selected"
+  },
+  "home": {
+    "weeklyTitle": "This Week's Content Ideas",
+    "weeklySubtitle": "{{count}} fresh ideas for you",
+    "noIdeas": "No ideas to show. Please pick a niche from settings.",
+    "aiRefreshing": "Generating new ideas...",
+    "aiButton": "Refresh with AI",
+    "poolButton": "Refresh from pool",
+    "monday": "Monday",
+    "wednesday": "Wednesday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+  "reminders": {
+    "title": "Reminders",
+    "addReminder": "Add Reminder",
+    "time": "Time",
+    "days": "Days",
+    "permissionDenied": "Notification permission denied. Please enable it in settings.",
+    "noReminders": "No reminders yet"
+  },
+  "qa": {
+    "title": "Q&A Assistant",
+    "placeholder": "Ask me anything about content creation...",
+    "send": "Send",
+    "thinking": "Thinking...",
+    "error": "Something went wrong. Please try again.",
+    "welcome": "Hi! How can I help you with content creation today?"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "niche": "Niche",
+    "changeNiche": "Change Niche",
+    "currentNiche": "Current Niche",
+    "tr": "Turkish",
+    "en": "English",
+    "about": "About"
+  },
+  "niches": {
+    "fitness": "Fitness",
+    "food": "Food",
+    "tech": "Technology",
+    "fashion": "Fashion",
+    "travel": "Travel",
+    "gaming": "Gaming",
+    "personal_dev": "Personal Development",
+    "beauty": "Beauty"
+  }
+}
