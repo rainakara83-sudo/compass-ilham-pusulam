@@ -49,7 +49,8 @@ export default function RootLayout() {
     (async () => {
       const niche = await getStoredNiche();
       const inOnboarding = segments[0] === '(onboarding)';
-      const onWelcome = segments[1] === 'welcome';
+      const segArr: string[] = Array.isArray(segments) ? segments : [];
+      const onWelcome = segArr.some(s => s === 'welcome');
       if (!niche && !inOnboarding) {
         router.replace('/(onboarding)/language-select');
       } else if (niche && inOnboarding && !onWelcome) {
@@ -63,9 +64,12 @@ export default function RootLayout() {
     const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' }}>
-        <Animated.Text style={{ fontSize: 64, transform: [{ scale }], opacity }}>✨</Animated.Text>
+        <Animated.Text style={{ fontSize: 64, transform: [{ scale }], opacity }}>🧭</Animated.Text>
         <Animated.Text style={{ marginTop: 16, fontSize: 22, fontWeight: '800', color: '#111827', opacity }}>
-          Content Coach
+          Compass
+        </Animated.Text>
+        <Animated.Text style={{ marginTop: 4, fontSize: 13, fontWeight: '500', color: '#6366f1', opacity }}>
+          İlham Pusulam
         </Animated.Text>
       </View>
     );

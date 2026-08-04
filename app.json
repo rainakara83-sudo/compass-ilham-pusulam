@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "Content Coach",
+    "name": "Compass",
     "slug": "content-coach",
     "version": "1.0.0",
+    "description": "Compass - İlham Pusulam: Your content coach for ideas, planning, and growth.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0f172a"
     },
     "ios": {
       "supportsTablet": true,
@@ -43,6 +44,12 @@
         "projectId": "9ca03ad0-71b5-4b6e-8186-c762475164aa"
       }
     },
-    "owner": "rainakara"
+    "owner": "rainakara",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9ca03ad0-71b5-4b6e-8186-c762475164aa"
+    }
   }
 }

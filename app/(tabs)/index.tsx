@@ -241,7 +241,7 @@ export default function HomeScreen() {
     try {
       await Share.share({
         message: `İçerik fikri: ${idea}`,
-        title: 'Content Coach',
+        title: 'Compass — İlham Pusulam',
       });
     } catch (e) {
       console.warn('share error', e);

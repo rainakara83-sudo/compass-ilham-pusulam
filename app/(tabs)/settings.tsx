@@ -216,9 +216,9 @@ export default function SettingsScreen() {
   };
 
   const sendFeedback = async () => {
-    const subject = encodeURIComponent('Content Coach — Geri bildirim');
+    const subject = encodeURIComponent('Compass (İlham Pusulam) — Geri bildirim');
     const body = encodeURIComponent(
-      `Merhaba Content Coach ekibi,\n\nUygulama hakkındaki düşüncelerim:\n\n—\nUygulama dili: ${i18n.language}\nSürüm: v${APP_VERSION}\nNiş: ${niche ?? '-'}\n`
+      `Merhaba Compass ekibi,\n\nUygulama hakkındaki düşüncelerim:\n\n—\nUygulama dili: ${i18n.language}\nSürüm: v${APP_VERSION}\nNiş: ${niche ?? '-'}\n`
     );
     const url = `mailto:feedback@contentcoach.app?subject=${subject}&body=${body}`;
     try {
@@ -239,7 +239,7 @@ export default function SettingsScreen() {
   const rateApp = () => {
     Alert.alert(
       '⭐ Uygulamayı değerlendir',
-      'Content Coach\'u beğendin mi? Mağazada yorum bırakmak ister misin?',
+      'Compass — İlham Pusulam\'u beğendin mi? Mağazada yorum bırakmak ister misin?',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
@@ -261,8 +261,8 @@ export default function SettingsScreen() {
     try {
       await Share.share({
         message:
-          'Content Coach ile her hafta yeni içerik fikirleri al! Nişini seç, AI ya da hazır havuzdan fikir üret, hatırlatıcılarla üretimini takip et. https://contentcoach.app',
-        title: 'Content Coach',
+          'Compass — İlham Pusulam ile her hafta yeni içerik fikirleri al! Nişini seç, AI ya da hazır havuzdan fikir üret, hatırlatıcılarla üretimini takip et. https://contentcoach.app',
+        title: 'Compass — İlham Pusulam',
       });
     } catch (e) {
       console.warn('share app error', e);
@@ -291,7 +291,7 @@ export default function SettingsScreen() {
     try {
       const bundle = await exportAllData();
       const summary = [
-        `Content Coach Yedek`,
+        `Compass — İlham Pusulam Yedek`,
         `Tarih: ${new Date(bundle.exportedAt).toLocaleString('tr-TR')}`,
         `Niş: ${bundle.niche ?? '-'}`,
         `Favoriler: ${bundle.favorites.length}`,
@@ -301,7 +301,7 @@ export default function SettingsScreen() {
       ].join('\n');
       const payload = JSON.stringify({ summary, data: bundle }, null, 2);
       await Share.share({
-        title: 'Content Coach Yedek',
+        title: 'Compass — İlham Pusulam Yedek',
         message: payload,
       });
     } catch (e) {
@@ -352,10 +352,10 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={styles.brandRow}>
-        <Text style={styles.brandIcon}>✨</Text>
+        <Text style={styles.brandIcon}>🧭</Text>
         <View>
-          <Text style={[styles.brandName, { color: colors.text }]}>Content Coach</Text>
-          <Text style={styles.brandSub}>v{APP_VERSION}</Text>
+          <Text style={[styles.brandName, { color: colors.text }]}>Compass</Text>
+          <Text style={styles.brandSub}>İlham Pusulam · v{APP_VERSION}</Text>
         </View>
       </View>
 
@@ -426,7 +426,7 @@ export default function SettingsScreen() {
       <Text style={styles.section}>{t('settings.about')}</Text>
       <View style={styles.card}>
         <Text style={styles.aboutText}>
-          Content Coach, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
+          Compass — İlham Pusulam, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
         </Text>
         <Text style={styles.aboutSmall}>Sürüm: v{APP_VERSION}</Text>
       </View>

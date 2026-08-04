@@ -150,7 +150,7 @@ export default function IdeaDetailModal() {
   const onShare = async () => {
     setBusy(true);
     try {
-      await Share.share({ message: `İçerik fikri: ${text}`, title: 'Content Coach' });
+      await Share.share({ message: `İçerik fikri: ${text}`, title: 'Compass — İlham Pusulam' });
       setShared(true);
       setTimeout(() => setShared(false), 1500);
     } finally {

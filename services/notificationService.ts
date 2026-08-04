@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
@@ -103,6 +104,7 @@ export const scheduleReminder = async (reminder: Reminder): Promise<string | nul
           categoryIdentifier: Platform.OS === 'ios' ? 'reminder' : undefined,
         },
         trigger: {
+          type: SchedulableTriggerInputTypes.DATE,
           date: target,
         },
       });
@@ -115,10 +117,10 @@ export const scheduleReminder = async (reminder: Reminder): Promise<string | nul
             categoryIdentifier: Platform.OS === 'ios' ? 'reminder' : undefined,
           },
           trigger: {
+            type: SchedulableTriggerInputTypes.WEEKLY,
             weekday,
             hour: reminder.hour,
             minute: reminder.minute,
-            repeats: true,
           },
         });
       }
@@ -139,7 +141,7 @@ export const scheduleSnooze = async (minutes: number, reminder: Pick<Reminder, '
         title: '⏰ Ertelendi',
         body: `${minutes} dakika sonra tekrar hatırlatacağız.`,
       },
-      trigger: { seconds: minutes * 60 },
+      trigger: { type: SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: minutes * 60 },
     });
     return true;
   } catch (e) {
@@ -241,7 +243,7 @@ export const sendTestNotification = async (): Promise<boolean> => {
         title: 'Bu bir test bildirimi 🔔',
         body: 'Hatırlatmaların doğru çalışıyor!',
       },
-      trigger: { seconds: 2 },
+      trigger: { type: SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
     });
     return true;
   } catch (e) {
@@ -287,10 +289,10 @@ export const scheduleWeeklySummary = async (): Promise<boolean> => {
         body: 'Yeni haftanın fikirleri hazır. Uygulamayı aç ve göz at!',
       },
       trigger: {
+        type: SchedulableTriggerInputTypes.WEEKLY,
         weekday: 1,
         hour: 8,
         minute: 0,
-        repeats: true,
       },
     });
     weeklySummaryId = id;
@@ -336,7 +338,7 @@ export const scheduleDailyIdea = async (): Promise<boolean> => {
         title: '💡 Günün fikri hazır',
         body: 'Sabah 8’de yeni bir içerik fikri seni bekliyor. Uygulamayı aç!',
       },
-      trigger: { hour: 8, minute: 0, repeats: true },
+      trigger: { type: SchedulableTriggerInputTypes.DAILY, hour: 8, minute: 0 },
     });
     await AsyncStorage.setItem(DAILY_IDEA_KEY, id);
     return true;

@@ -47,7 +47,7 @@ export default function InfoScreen() {
   const onFeedback = async () => {
     try {
       await Share.share({
-        message: 'Content Coach geri bildirim: ',
+        message: 'Compass — İlham Pusulam geri bildirim: ',
         title: 'Geri bildirim',
       });
     } catch {}
@@ -67,10 +67,10 @@ export default function InfoScreen() {
       </View>
 
       <View style={styles.aboutCard}>
-        <Text style={styles.brandIcon}>✨</Text>
+        <Text style={styles.brandIcon}>🧭</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.brandName}>Content Coach</Text>
-          <Text style={styles.brandSub}>v{APP_VERSION} • Niş bazlı içerik koçu</Text>
+          <Text style={styles.brandName}>Compass</Text>
+          <Text style={styles.brandSub}>İlham Pusulam · v{APP_VERSION}</Text>
         </View>
       </View>
 
@@ -103,7 +103,7 @@ export default function InfoScreen() {
       <Text style={styles.section}>Hakkında</Text>
       <View style={styles.aboutCard}>
         <Text style={styles.aboutBody}>
-          Content Coach, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
+          Compass — İlham Pusulam, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
           Tüm veriler cihazında saklanır.
         </Text>
       </View>

@@ -66,7 +66,7 @@ export default function HistoryScreen() {
     h.ideas.forEach((idea, idx) => {
       lines.push(`${idx + 1}. [${idea.day.toUpperCase()}] ${idea.text}`);
     });
-    lines.push('', '— Content Coach');
+    lines.push('', '— Compass — İlham Pusulam');
     const message = lines.join('\n');
     try {
       await Share.share({ message, title: `${h.weekId} içerik planı` });
