@@ -6,7 +6,7 @@
 [![React Native](https://img.shields.io/badge/React%20Native-0.76-61dafb?logo=react)](https://reactnative.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178c6?logo=typescript)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Netlify-00c7b7?logo=netlify)](https://compass-ilham-pusulam.netlify.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Netlify-00c7b7?logo=netlify)](https://fabulous-cranachan-48070e.netlify.app)
 
 ---
 
@@ -303,7 +303,7 @@ Tüm veriler **AsyncStorage**'da cihazda saklanır:
 
 ## 🌐 Canlı Demo
 
-👉 **[https://compass-ilham-pusulam.netlify.app](https://compass-ilham-pusulam.netlify.app)** *(Netlify URL'ini buraya ekle)*
+👉 **[https://fabulous-cranachan-48070e.netlify.app](https://fabulous-cranachan-48070e.netlify.app)**
 
 Expo Go ile test: https://expo.dev/accounts/rainakara/projects/content-coach/updates
 
@@ -390,7 +390,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
 - **Geri bildirim:** Ayarlar → "Geri bildirim gönder"
 - **Issue:** GitHub Issues
-- **Website:** [compass-ilham-pusulam.netlify.app](https://compass-ilham-pusulam.netlify.app)
+- **Website:** [fabulous-cranachan-48070e.netlify.app](https://fabulous-cranachan-48070e.netlify.app)
 
 ---
 
