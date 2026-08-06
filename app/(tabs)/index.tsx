@@ -1,8 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Clipboard,
+  Dimensions,
+  Easing,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -10,14 +14,58 @@ import {
   Text,
   View,
 } from 'react-native';
-import { RectButton, Swipeable } from 'react-native-gesture-handler';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { getStoredNiche, getStreak, getStreakShields, recordStreakActivity, saveWeekToHistory, toggleFavorite, getFavorites, getDoneIdeas, toggleDone, getTodayDoneCount, bumpTodayDoneCount, getIdeaStats, IdeaStats, addCopyToHistory, getRecentCopies, CopyEntry, getWeeklyGoal, setWeeklyGoal, getCurrentWeekGoalProgress, incrementWeeklyGoalProgress, decrementWeeklyGoalProgress, WeeklyGoalProgress, WeeklyGoalTarget, getScheduleForDate, toggleScheduleEntry, ScheduleEntry, getDailyCard } from '../../services/storage';
-import { NicheId, WeeklyIdea, pickWeeklyIdeasFromPool, isWeekend } from '../../services/contentService';
+import {
+  getActiveNiche,
+  setActiveNiche,
+  getStreak,
+  getStreakShields,
+  recordStreakActivity,
+  saveWeekToHistory,
+  toggleFavorite,
+  getFavorites,
+  getDoneIdeas,
+  toggleDone,
+  getTodayDoneCount,
+  bumpTodayDoneCount,
+  getIdeaStats,
+  IdeaStats,
+  addCopyToHistory,
+  getRecentCopies,
+  CopyEntry,
+  getWeeklyGoal,
+  setWeeklyGoal,
+  getCurrentWeekGoalProgress,
+  incrementWeeklyGoalProgress,
+  decrementWeeklyGoalProgress,
+  WeeklyGoalProgress,
+  WeeklyGoalTarget,
+  getScheduleForDate,
+  toggleScheduleEntry,
+  ScheduleEntry,
+  getDailyCard,
+  getMonthlyUsage,
+  getUserPlan,
+  incrementMonthlyUsage,
+  FREE_NICHE_LIMIT,
+  MonthlyUsage,
+  UserPlan,
+} from '../../services/storage';
+import { NicheId, WeeklyIdea, pickWeeklyIdeasFromPool, isWeekend, getBestTimeForToday, formatHHMM, formatDurationTR, formatLongDate, NICHE_TIME_BOOST } from '../../services/contentService';
 import { generateWeeklyIdeasWithAIResult } from '../../services/aiService';
 import AnimatedCard from '../../components/AnimatedCard';
+import { NicheImage, getNiche } from '../../components/NicheImage';
+import nichesData from '../../data/niches.json';
 import * as Notifications from 'expo-notifications';
+import { lightColors } from '../../styles/colors';
+import { spacing } from '../../styles/spacing';
+import PlanBadge from '../../components/PlanBadge';
+import PaywallModal from '../../components/PaywallModal';
+import { radius } from '../../styles/radius';
+import { typography } from '../../styles/typography';
+import { shadows } from '../../styles/shadows';
 
 const getWeekId = (d: Date) => {
   const onejan = new Date(d.getFullYear(), 0, 1);
@@ -31,8 +79,18 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const [niche, setNiche] = useState<NicheId | null>(null);
+  const [nichePickerOpen, setNichePickerOpen] = useState(false);
+  const [goalPickerOpen, setGoalPickerOpen] = useState(false);
+  const [dailyCardFlipped, setDailyCardFlipped] = useState(false);
+  const dailyFlipAnim = useRef(new Animated.Value(0)).current;
   const [ideas, setIdeas] = useState<WeeklyIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userPlan, setUserPlan] = useState<UserPlan>('free');
+  const [usage, setUsage] = useState<MonthlyUsage | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallReason, setPaywallReason] = useState<'idea_limit' | 'niche_limit'>('idea_limit');
+  const [paywallNicheName, setPaywallNicheName] = useState<string | undefined>();
+  const [planRefresh, setPlanRefresh] = useState(0);
   const [aiLoading, setAiLoading] = useState(false);
   const [poolLoading, setPoolLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -49,8 +107,10 @@ export default function HomeScreen() {
   const [goalTarget, setGoalTarget] = useState<WeeklyGoalTarget>(5);
   const [goalProgress, setGoalProgress] = useState<WeeklyGoalProgress | null>(null);
   const [aiInfoMsg, setAiInfoMsg] = useState<string | null>(null);
+  const [aiInfoVariant, setAiInfoVariant] = useState<'info' | 'success' | 'warn'>('info');
   const [todayPlan, setTodayPlan] = useState<ScheduleEntry[]>([]);
   const [dailyCardText, setDailyCardText] = useState<string | null>(null);
+  const [now, setNow] = useState<Date>(new Date());
   const todayDateKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const weekId = useMemo(() => getWeekId(new Date()), []);
@@ -64,10 +124,26 @@ export default function HomeScreen() {
   }, []);
 
   const loadPool = async (n: NicheId) => {
+    const plan = await getUserPlan();
+    setUserPlan(plan);
+    if (plan === 'free') {
+      const u = await getMonthlyUsage();
+      setUsage(u);
+      if (u.count >= u.limit) {
+        setPaywallReason('idea_limit');
+        setPaywallOpen(true);
+        setLoading(false);
+        return;
+      }
+    }
     setLoading(true);
     const picked = pickWeeklyIdeasFromPool(n, weekend);
     setIdeas(picked);
     setLoading(false);
+    if (plan === 'free') {
+      const u = await incrementMonthlyUsage(picked.length);
+      setUsage(u);
+    }
     await saveWeekToHistory({
       weekId,
       niche: n,
@@ -86,7 +162,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     (async () => {
-      const n = await getStoredNiche();
+      const n = await getActiveNiche();
       if (!n) {
         setLoading(false);
         return;
@@ -119,14 +195,22 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    tick();
+    const interval = setInterval(tick, 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadTodayPlan = useCallback(async () => {
     const list = await getScheduleForDate(todayDateKey);
     list.sort((a, b) => Number(a.done) - Number(b.done));
     setTodayPlan(list);
   }, [todayDateKey]);
 
-  const loadDailyCard = useCallback(async () => {
-    const card = await getDailyCard(niche);
+  const loadDailyCard = useCallback(async (overrideNiche?: NicheId | null) => {
+    const target = overrideNiche !== undefined ? overrideNiche : niche;
+    const card = await getDailyCard(target);
     setDailyCardText(card.idea);
   }, [niche]);
 
@@ -134,7 +218,23 @@ export default function HomeScreen() {
     useCallback(() => {
       loadTodayPlan();
       loadDailyCard();
-    }, [loadTodayPlan, loadDailyCard])
+      (async () => {
+        const [p, u, active] = await Promise.all([
+          getUserPlan(),
+          getMonthlyUsage(),
+          getActiveNiche(),
+        ]);
+        setUserPlan(p);
+        setUsage(u);
+        if (active && active !== niche) {
+          setNiche(active);
+          setIdeas([]);
+          setLoading(true);
+          await loadPool(active);
+        }
+        setPlanRefresh((x) => x + 1);
+      })();
+    }, [loadTodayPlan, loadDailyCard, niche])
   );
 
   const refreshFromPool = async () => {
@@ -151,7 +251,11 @@ export default function HomeScreen() {
   const refreshFromAI = async () => {
     if (!niche) return;
     setAiLoading(true);
-    setAiInfoMsg(null);
+    setAiInfoMsg('⏳ AI düşünüyor...');
+    setAiInfoVariant('info');
+    setToastVariant('info');
+    setToastMsg('⏳ AI düşünüyor...');
+    setTimeout(() => setToastMsg(null), 2000);
     const currentTexts = ideas.map((i) => i.text);
     const result = await generateWeeklyIdeasWithAIResult(niche, currentTexts);
     if (result.ideas.length > 0) {
@@ -164,19 +268,27 @@ export default function HomeScreen() {
       });
       setIdeaStats(await getIdeaStats());
       if (result.fallbackUsed) {
-        setAiInfoMsg('🤖 AI şu an yanıt vermedi. Akıllı havuzdan seçildi (geçmiştekilerden farklı).');
+        setAiInfoMsg('⚠️ AI şu an yanıt vermedi. Akıllı havuzdan yeni bir fikir seçildi.');
+        setAiInfoVariant('warn');
         setToastVariant('warn');
-        setToastMsg('🤖 AI çevrimdışı — akıllı havuz kullanıldı');
+        setToastMsg('⚠️ Havuzdan fikir seçildi');
       } else if (result.usedVariant && result.usedVariant !== 'detailed') {
         setAiInfoMsg(`🤖 AI "${result.usedVariant}" yedek prompt ile cevap verdi.`);
+        setAiInfoVariant('info');
         setToastVariant('info');
         setToastMsg(`🤖 Yedek prompt ile ${result.ideas.length} fikir`);
       } else {
+        setAiInfoMsg(`✨ Yeni fikir geldi (${result.ideas.length} adet)`);
+        setAiInfoVariant('success');
         setToastVariant('success');
-        setToastMsg(`✨ ${result.ideas.length} yeni AI fikri geldi!`);
+        setToastMsg(`✨ Yeni fikir geldi`);
       }
+      setTimeout(() => setAiInfoMsg(null), 3000);
       setTimeout(() => setToastMsg(null), 2500);
     } else {
+      setAiInfoMsg('⚠️ AI şu an yanıt vermedi. Akıllı havuzdan yeni bir fikir seçildi.');
+      setAiInfoVariant('warn');
+      setTimeout(() => setAiInfoMsg(null), 3000);
       Alert.alert('AI şu an cevap veremedi. Havuzdan yenilemeyi deneyin.');
     }
     setAiLoading(false);
@@ -225,16 +337,64 @@ export default function HomeScreen() {
   };
 
   const onPickGoal = () => {
-    Alert.alert(
-      'Haftalık hedefini seç',
-      'Bu hafta kaç fikir üretmek istiyorsun?',
-      [
-        { text: '3 fikir', onPress: async () => { await setWeeklyGoal(3); setGoalTarget(3); setGoalProgress(await getCurrentWeekGoalProgress()); } },
-        { text: '5 fikir', onPress: async () => { await setWeeklyGoal(5); setGoalTarget(5); setGoalProgress(await getCurrentWeekGoalProgress()); } },
-        { text: '7 fikir', onPress: async () => { await setWeeklyGoal(7); setGoalTarget(7); setGoalProgress(await getCurrentWeekGoalProgress()); } },
-        { text: 'Vazgeç', style: 'cancel' },
-      ]
-    );
+    setGoalPickerOpen(true);
+  };
+
+  const applyGoal = async (n: WeeklyGoalTarget) => {
+    await setWeeklyGoal(n);
+    setGoalTarget(n);
+    setGoalProgress(await getCurrentWeekGoalProgress());
+    setGoalPickerOpen(false);
+  };
+
+  const openNichePicker = () => setNichePickerOpen(true);
+  const closeNichePicker = () => setNichePickerOpen(false);
+
+  const pickNicheInline = async (id: NicheId) => {
+    if (id === niche) {
+      setNichePickerOpen(false);
+      return;
+    }
+    const plan = await getUserPlan();
+    setUserPlan(plan);
+    const nicheList = nichesData as { id: string }[];
+    const usedNiches = nicheList.slice(0, FREE_NICHE_LIMIT).map((n) => n.id);
+    const isFresh = !usedNiches.includes(id);
+    if (plan === 'free' && isFresh) {
+      const targetName = t(`niches.${id}`, id);
+      setPaywallNicheName(targetName);
+      setPaywallReason('niche_limit');
+      setPaywallOpen(true);
+      return;
+    }
+    await setActiveNiche(id);
+    setNiche(id);
+    setNichePickerOpen(false);
+    setDailyCardText(null);
+    setDailyCardFlipped(false);
+    dailyFlipAnim.setValue(0);
+    setIdeas([]);
+    setLoading(true);
+    setAiInfoMsg(null);
+    setAiInfoMsg(`✨ Niş "${id}" olarak değişti. Yeni fikirler yükleniyor...`);
+    setAiInfoVariant('info');
+    setToastVariant('info');
+    setToastMsg(`🔄 Niş değişti: yeni fikirler geliyor`);
+    setTimeout(() => setToastMsg(null), 2200);
+    setTimeout(() => setAiInfoMsg(null), 3500);
+    await loadPool(id);
+    await loadDailyCard(id);
+  };
+
+  const flipDailyCard = () => {
+    const next = dailyCardFlipped ? 0 : 1;
+    setDailyCardFlipped(!dailyCardFlipped);
+    Animated.timing(dailyFlipAnim, {
+      toValue: next,
+      duration: 420,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    }).start();
   };
 
   const onShare = async (idea: string) => {
@@ -296,7 +456,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator />
+        <ActivityIndicator color={lightColors.primary} />
       </View>
     );
   }
@@ -304,13 +464,14 @@ export default function HomeScreen() {
   if (!niche) {
     return (
       <View style={styles.center}>
-        <Text>{t('home.noIdeas')}</Text>
+        <Text style={styles.emptyText}>{t('home.noIdeas')}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{t('home.weeklyTitle')}</Text>
@@ -331,10 +492,120 @@ export default function HomeScreen() {
             <Text style={styles.streakText}>{streak}</Text>
           </View>
         )}
+        {userPlan === 'free' && usage && (
+          <Pressable onPress={() => router.push('/pricing')} style={styles.streakBadge}>
+            <Text style={styles.streakText}>💡 {usage.count}/{usage.limit}</Text>
+          </Pressable>
+        )}
         <View style={styles.weekBadge}>
           <Text style={styles.weekBadgeText}>{weekId}</Text>
         </View>
       </View>
+
+      {niche && (
+        <View style={styles.nicheHeroCard}>
+          <NicheImage nicheId={niche} size={72} borderRadius={18} />
+          <View style={{ flex: 1, marginLeft: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.nicheHeroLabel}>BU HAFTANIN NİŞİ</Text>
+              <PlanBadge size="sm" refreshKey={planRefresh} />
+            </View>
+            <Text style={styles.nicheHeroTitle}>{t(`niches.${niche}`, niche)}</Text>
+            <Text style={styles.nicheHeroSub}>{nichesData.find((x) => x.id === niche)?.description ?? ''}</Text>
+          </View>
+          <Pressable onPress={openNichePicker} style={styles.nicheHeroBtn} hitSlop={6}>
+            <Text style={styles.nicheHeroBtnText}>Değiştir</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {niche && (() => {
+        const bestT = getBestTimeForToday(niche, now);
+        const nicheColor = (nichesData.find((x) => x.id === niche)?.color) ?? lightColors.primary;
+        const slots = NICHE_TIME_BOOST[niche] ?? [];
+        const slotLabelKey = `home.${bestT.slot.label}Slot`;
+        return (
+          <View style={[styles.timeWidget, { borderColor: nicheColor + '55' }]}>
+            <View style={[styles.timeWidgetGradient, { backgroundColor: nicheColor + '12' }]}>
+              <View style={styles.timeWidgetRow}>
+                <View style={styles.timeWidgetCol}>
+                  <Text style={[styles.timeWidgetBadge, { color: nicheColor }]}>{t('home.nowBadge')}</Text>
+                  <Text style={styles.timeWidgetTime}>{formatHHMM(now.getHours(), now.getMinutes())}</Text>
+                  <Text style={styles.timeWidgetDate}>{formatLongDate(now)}</Text>
+                </View>
+                <View style={[styles.timeWidgetDivider, { backgroundColor: nicheColor + '40' }]} />
+                <View style={styles.timeWidgetCol}>
+                  <Text style={[styles.timeWidgetBadge, { color: nicheColor }]}>{t('home.bestTimeBadge')}</Text>
+                  <Text style={styles.timeWidgetTime}>{formatHHMM(bestT.hour, bestT.minute)}</Text>
+                  <Text style={styles.timeWidgetDate}>
+                    {bestT.isNow ? '🔥 ' + t('home.onAir') : `🎯 ${t('home.goldHourIn')} ${formatDurationTR(bestT.minutesUntil)}`}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.timeWidgetSlotsRow}>
+                {slots.map((s, i) => {
+                  const active = bestT.slot === s;
+                  return (
+                    <View
+                      key={`slot-${i}`}
+                      style={[
+                        styles.timeWidgetSlot,
+                        active && { backgroundColor: nicheColor, borderColor: nicheColor },
+                      ]}
+                    >
+                      <Text style={[styles.timeWidgetSlotLabel, active && { color: '#FFFFFF' }]}>
+                        {t(slotLabelKey, s.label)}
+                      </Text>
+                      <Text style={[styles.timeWidgetSlotRange, active && { color: '#FFFFFFCC' }]}>
+                        {formatHHMM(s.start, 0)}–{formatHHMM(s.end, 0)}
+                      </Text>
+                      <View style={styles.timeWidgetSlotBar}>
+                        <View
+                          style={[
+                            styles.timeWidgetSlotBarFill,
+                            {
+                              width: `${s.weight * 10}%`,
+                              backgroundColor: active ? '#FFFFFF' : nicheColor,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+              <Pressable onPress={() => router.push('/(tabs)/calendar')} style={[styles.timeWidgetCta, { backgroundColor: nicheColor }]}>
+                <Text style={styles.timeWidgetCtaText}>📅 {t('home.addToCalendar')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      })()}
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.nicheScroller}
+      >
+        {nichesData.map((n) => {
+          const active = n.id === niche;
+          return (
+            <Pressable
+              key={n.id}
+              onPress={() => pickNicheInline(n.id as NicheId)}
+              style={[
+                styles.nicheChip,
+                { borderColor: active ? n.color : 'rgba(255,255,255,0.4)' },
+              ]}
+            >
+              <NicheImage nicheId={n.id} size={44} borderRadius={10} />
+              <Text style={styles.nicheChipLabel} numberOfLines={1}>
+                {t(`niches.${n.id}`, n.id)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {notifStatus !== 'granted' && (
         <Pressable
@@ -388,7 +659,7 @@ export default function HomeScreen() {
                 styles.goalBarFill,
                 {
                   width: `${Math.min(100, Math.round((goalProgress.completed / goalProgress.target) * 100))}%`,
-                  backgroundColor: goalProgress.achieved ? '#10B981' : '#4D96FF',
+                  backgroundColor: goalProgress.achieved ? lightColors.success.solid : lightColors.primary,
                 },
               ]}
             />
@@ -407,19 +678,36 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {dailyCardText && (
-        <Pressable
-          onPress={() => router.push({ pathname: '/daily-card', params: { niche: niche ?? '' } })}
-          style={styles.dailyCard}
-        >
-          <View style={styles.dailyCardHead}>
-            <Text style={styles.dailyCardBadge}>🌟 GÜNÜN KARTI</Text>
-            <Text style={styles.dailyCardChev}>›</Text>
-          </View>
-          <Text style={styles.dailyCardText} numberOfLines={3}>{dailyCardText}</Text>
-          <Text style={styles.dailyCardHint}>Çevirmek için karta dokun ↻</Text>
-        </Pressable>
-      )}
+      {dailyCardText && (() => {
+        const nicheColor = (nichesData.find((x) => x.id === niche)?.color) ?? lightColors.secondary;
+        const dailyRotate = dailyFlipAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+        return (
+          <Pressable
+            onPress={flipDailyCard}
+            style={[styles.dailyCard, { backgroundColor: nicheColor + '18', borderColor: nicheColor }]}
+          >
+            <View style={styles.dailyCardHead}>
+              <Text style={[styles.dailyCardBadge, { color: nicheColor }]}>🌟 GÜNÜN KARTI</Text>
+              <Animated.Text style={[styles.dailyCardChev, { transform: [{ rotate: dailyRotate }] }]}>
+                ↻
+              </Animated.Text>
+            </View>
+            <Text style={styles.dailyCardText} numberOfLines={3}>
+              {dailyCardFlipped ? '✨ Detaylı açıyı görmek için tam ekranı aç' : dailyCardText}
+            </Text>
+            <Text style={styles.dailyCardHint}>
+              {dailyCardFlipped ? '↩ Geri çevirmek için tekrar dokun' : 'Çevirmek için karta dokun ↻'}
+            </Text>
+            <Pressable
+              onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/daily-card', params: { niche: niche ?? '' } }); }}
+              hitSlop={8}
+              style={[styles.dailyCardOpenBtn, { backgroundColor: nicheColor }]}
+            >
+              <Text style={styles.dailyCardOpenBtnText}>Tam ekran ›</Text>
+            </Pressable>
+          </Pressable>
+        );
+      })()}
 
       <Pressable
         onPress={() => router.push('/mood')}
@@ -568,7 +856,7 @@ export default function HomeScreen() {
             <Text style={styles.recentCopiesTitle}>📋 Son kopyalananlar</Text>
             <Text style={styles.recentCopiesCount}>{recentCopies.length}</Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentScroll}>
             {recentCopies.slice(0, 8).map((c, i) => (
               <Pressable
                 key={`${c.copiedAt}-${i}`}
@@ -584,7 +872,7 @@ export default function HomeScreen() {
 
       {weekend && (
         <View style={styles.weekendBanner}>
-          <Text style={styles.weekendTitle}>🎉 Hafta sonu modu</Text>
+          <Text style={styles.weekendTitle}>� Hafta sonu modu</Text>
           <Text style={styles.weekendSub}>Sana ekstra bir bonus fikir ekledik. İyi içerikler!</Text>
         </View>
       )}
@@ -628,9 +916,35 @@ export default function HomeScreen() {
       )}
 
       {aiInfoMsg && (
-        <Pressable onPress={() => setAiInfoMsg(null)} style={styles.aiInfoBanner}>
-          <Text style={styles.aiInfoText}>{aiInfoMsg}</Text>
-          <Text style={styles.aiInfoDismiss}>✕</Text>
+        <Pressable
+          onPress={() => setAiInfoMsg(null)}
+          style={[
+            styles.aiInfoBanner,
+            aiInfoVariant === 'success' && styles.aiInfoBannerSuccess,
+            aiInfoVariant === 'warn' && styles.aiInfoBannerWarn,
+            aiInfoVariant === 'info' && styles.aiInfoBannerInfo,
+          ]}
+        >
+          <Text
+            style={[
+              styles.aiInfoText,
+              aiInfoVariant === 'success' && styles.aiInfoTextSuccess,
+              aiInfoVariant === 'warn' && styles.aiInfoTextWarn,
+              aiInfoVariant === 'info' && styles.aiInfoTextInfo,
+            ]}
+          >
+            {aiInfoMsg}
+          </Text>
+          <Text
+            style={[
+              styles.aiInfoDismiss,
+              aiInfoVariant === 'success' && { color: lightColors.success.text },
+              aiInfoVariant === 'warn' && { color: lightColors.warning.text },
+              aiInfoVariant === 'info' && { color: lightColors.info.text },
+            ]}
+          >
+            ✕
+          </Text>
         </Pressable>
       )}
 
@@ -702,12 +1016,12 @@ export default function HomeScreen() {
                       onPress={() => onDone(idea.text)}
                       style={[styles.iconBtn, isDone && styles.iconBtnDone]}
                     >
-                      <Text style={[styles.iconBtnText, isDone && { color: 'white' }]}>
+                      <Text style={[styles.iconBtnText, isDone && { color: lightColors.textInverse }]}>
                         {isDone ? '✓' : '◻'}
                       </Text>
                     </Pressable>
                     <Pressable onPress={() => onFavorite(idea.text)} style={styles.iconBtn}>
-                      <Text style={[styles.iconBtnText, isFav && { color: '#F59E0B' }]}>
+                      <Text style={[styles.iconBtnText, isFav && { color: lightColors.warning.solid }]}>
                         {isFav ? '★' : '☆'}
                       </Text>
                     </Pressable>
@@ -715,7 +1029,7 @@ export default function HomeScreen() {
                       <Text style={styles.iconBtnText}>↗</Text>
                     </Pressable>
                     <Pressable onPress={() => copyIdea(idx, idea.text, idea.source)} style={styles.iconBtn}>
-                      <Text style={styles.iconBtnText}>{copiedIdx === idx ? '✓' : '⧉'}</Text>
+                      <Text style={styles.iconBtnText}>{copiedIdx === idx ? '✓' : '�'}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -776,478 +1090,1659 @@ export default function HomeScreen() {
         </Pressable>
         <Pressable style={styles.btn} onPress={refreshFromAI} disabled={aiLoading || poolLoading}>
           {aiLoading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color={lightColors.textInverse} />
           ) : (
             <Text style={styles.btnText}>{t('home.aiButton')}</Text>
           )}
         </Pressable>
       </View>
     </ScrollView>
+
+    {nichePickerOpen && (
+      <InlineNichePicker
+        currentNiche={niche}
+        niches={nichesData}
+        onClose={closeNichePicker}
+        onPick={pickNicheInline}
+        title="Bu haftanın nişini değiştir"
+        t={t}
+      />
+    )}
+
+    {goalPickerOpen && (
+      <InlineGoalPicker
+        currentTarget={goalTarget}
+        onClose={() => setGoalPickerOpen(false)}
+        onPick={applyGoal}
+      />
+    )}
+
+    <PaywallModal
+      visible={paywallOpen}
+      onClose={() => setPaywallOpen(false)}
+      usage={usage}
+      reason={paywallReason}
+      nicheName={paywallNicheName}
+    />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 50, marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
-  weekBadge: { backgroundColor: '#E0E7FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
-  weekBadgeText: { fontSize: 11, color: '#4338CA', fontWeight: '700' },
+  container: { flex: 1, backgroundColor: lightColors.bg },
+  contentContainer: {
+    padding: spacing.lg,
+    paddingBottom: spacing['5xl'],
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: lightColors.bg,
+  },
+  emptyText: {
+    ...typography.body,
+    color: lightColors.textMuted,
+  },
+  nicheHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: lightColors.surface,
+    padding: 14,
+    borderRadius: 18,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: lightColors.border,
+    ...shadows.sm,
+  },
+  nicheHeroLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: lightColors.primary,
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  nicheHeroTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: lightColors.text,
+  },
+  nicheHeroSub: {
+    fontSize: 11,
+    color: lightColors.textMuted,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  nicheHeroBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: lightColors.primarySoft,
+  },
+  nicheHeroBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: lightColors.primary,
+  },
+  nicheScroller: {
+    paddingVertical: 4,
+    paddingBottom: spacing.md,
+    gap: 8,
+  },
+  nicheChip: {
+    width: 78,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 14,
+    borderWidth: 2,
+    backgroundColor: lightColors.surface,
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  nicheChipLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: lightColors.text,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing['4xl'],
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  title: {
+    ...typography.h1,
+    color: lightColors.text,
+  },
+  subtitle: {
+    ...typography.bodySm,
+    color: lightColors.textMuted,
+    marginTop: spacing.xs,
+  },
+  weekBadge: {
+    backgroundColor: lightColors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  weekBadgeText: {
+    ...typography.caption,
+    color: lightColors.primary,
+    fontWeight: '700',
+  },
   searchBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'white',
+    backgroundColor: lightColors.surface,
     borderWidth: 1.5,
-    borderColor: '#4D96FF',
+    borderColor: lightColors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 6,
+    marginRight: spacing.xs,
   },
   searchBtnTxt: { fontSize: 16 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, marginRight: 6 },
-  streakIcon: { fontSize: 12, marginRight: 4 },
-  streakText: { fontSize: 12, color: '#92400E', fontWeight: '800' },
-  shieldBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, marginRight: 6 },
-  shieldIcon: { fontSize: 12, marginRight: 4 },
-  shieldText: { fontSize: 12, color: '#1E40AF', fontWeight: '800' },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: lightColors.warning.bg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginRight: spacing.xs,
+  },
+  streakIcon: { fontSize: 12, marginRight: spacing.xs },
+  streakText: {
+    ...typography.caption,
+    color: lightColors.warning.text,
+    fontWeight: '800',
+  },
+  shieldBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: lightColors.info.bg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginRight: spacing.xs,
+  },
+  shieldIcon: { fontSize: 12, marginRight: spacing.xs },
+  shieldText: {
+    ...typography.caption,
+    color: lightColors.info.text,
+    fontWeight: '800',
+  },
   card: {
-    backgroundColor: 'white',
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dayBadge: { fontSize: 12, fontWeight: '700', color: '#4D96FF' },
-  iconBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  iconBtnText: { fontSize: 14, color: '#4D96FF', fontWeight: '700' },
-  ideaText: { fontSize: 16, color: '#111827', fontWeight: '600', lineHeight: 22 },
-  sourceBadge: { fontSize: 11, color: '#6B7280', backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  copiedHint: { marginTop: 8, fontSize: 12, color: '#10B981', fontWeight: '600' },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  btn: { flex: 1, backgroundColor: '#4D96FF', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  btnText: { color: 'white', fontWeight: '700' },
-  btnAlt: { backgroundColor: 'white', borderWidth: 1, borderColor: '#4D96FF' },
-  btnAltText: { color: '#4D96FF', fontWeight: '700' },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  dayBadge: {
+    ...typography.caption,
+    color: lightColors.primary,
+    fontWeight: '700',
+  },
+  iconBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.sm,
+    backgroundColor: lightColors.inputBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconBtnText: {
+    fontSize: 14,
+    color: lightColors.primary,
+    fontWeight: '700',
+  },
+  ideaText: {
+    ...typography.body,
+    color: lightColors.text,
+    fontWeight: '600',
+  },
+  sourceBadge: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    backgroundColor: lightColors.inputBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  copiedHint: {
+    marginTop: spacing.sm,
+    ...typography.caption,
+    color: lightColors.success.text,
+    fontWeight: '600',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  btn: {
+    flex: 1,
+    backgroundColor: lightColors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  btnText: {
+    color: lightColors.textInverse,
+    fontWeight: '700',
+  },
+  btnAlt: {
+    backgroundColor: lightColors.surface,
+    borderWidth: 1,
+    borderColor: lightColors.primary,
+  },
+  btnAltText: {
+    color: lightColors.primary,
+    fontWeight: '700',
+  },
   heroCard: {
-    backgroundColor: '#4D96FF',
-    padding: 20,
-    borderRadius: 18,
-    marginBottom: 18,
-    shadowColor: '#4D96FF',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    backgroundColor: lightColors.primary,
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    marginBottom: spacing.lg,
+    ...shadows.md,
+    shadowColor: lightColors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
   },
-  heroLabel: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.85)', letterSpacing: 1, marginBottom: 8 },
-  heroText: { fontSize: 18, fontWeight: '700', color: 'white', lineHeight: 24 },
-  heroTextDone: { textDecorationLine: 'line-through', opacity: 0.7 },
-  heroCardDone: { backgroundColor: '#10B981', shadowColor: '#10B981' },
-  heroFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
-  heroHint: { fontSize: 11, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' },
-  heroDay: { fontSize: 11, fontWeight: '700', color: 'white', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  swipeRight: { backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 24, borderRadius: 16, marginBottom: 12, width: 140 },
-  swipeLeft: { backgroundColor: '#F59E0B', justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 24, borderRadius: 16, marginBottom: 12, width: 140 },
-  swipeLeftOn: { backgroundColor: '#B45309' },
-  swipeText: { color: 'white', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
-  todayPill: { alignSelf: 'flex-start', backgroundColor: '#DCFCE7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 14 },
-  todayPillText: { fontSize: 12, color: '#166534', fontWeight: '700' },
+  heroLabel: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  heroText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: lightColors.textInverse,
+    lineHeight: 24,
+  },
+  heroTextDone: {
+    textDecorationLine: 'line-through',
+    opacity: 0.7,
+  },
+  heroCardDone: {
+    backgroundColor: lightColors.success.solid,
+  },
+  heroFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  heroHint: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontStyle: 'italic',
+  },
+  heroDay: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: lightColors.textInverse,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  swipeRight: {
+    backgroundColor: lightColors.success.solid,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing['2xl'],
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    width: 140,
+  },
+  swipeLeft: {
+    backgroundColor: lightColors.warning.solid,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing['2xl'],
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    width: 140,
+  },
+  swipeLeftOn: {
+    backgroundColor: lightColors.warning.text,
+  },
+  swipeText: {
+    color: lightColors.textInverse,
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  todayPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: lightColors.success.bg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginBottom: spacing.lg,
+  },
+  todayPillText: {
+    ...typography.caption,
+    color: lightColors.success.text,
+    fontWeight: '700',
+  },
   notifPill: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
+    backgroundColor: lightColors.info.bg,
+    borderColor: lightColors.info.border,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 14,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
   },
-  notifPillBad: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-  notifPillText: { fontSize: 13, fontWeight: '700', color: '#1E40AF' },
-  notifPillHint: { fontSize: 11, color: '#6B7280', marginTop: 2 },
+  notifPillBad: {
+    backgroundColor: lightColors.error.bg,
+    borderColor: lightColors.error.border,
+  },
+  notifPillText: {
+    ...typography.label,
+    color: lightColors.info.text,
+  },
+  notifPillHint: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    marginTop: 2,
+  },
   countdownPill: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#86EFAC',
+    backgroundColor: lightColors.success.bg,
+    borderColor: lightColors.success.border,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
   },
-  countdownText: { fontSize: 13, fontWeight: '600', color: '#166534' },
+  countdownText: {
+    ...typography.label,
+    color: lightColors.success.text,
+  },
   recentCopiesBox: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: lightColors.border,
   },
-  recentCopiesHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  recentCopiesTitle: { fontSize: 12, fontWeight: '800', color: '#374151', letterSpacing: 0.5 },
-  recentCopiesCount: { fontSize: 11, color: '#6B7280', fontWeight: '700', backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  recentCopiesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  recentCopiesTitle: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: lightColors.text,
+    letterSpacing: 0.5,
+  },
+  recentCopiesCount: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '700',
+    backgroundColor: lightColors.inputBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  recentScroll: {
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   recentCopyChip: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    backgroundColor: lightColors.inputBg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
     maxWidth: 220,
   },
-  recentCopyText: { fontSize: 12, color: '#111827', fontWeight: '600' },
+  recentCopyText: {
+    ...typography.caption,
+    color: lightColors.text,
+    fontWeight: '600',
+  },
   statsCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 14,
-    marginTop: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    marginTop: spacing.lg,
+    ...shadows.sm,
   },
-  statsTitle: { fontSize: 13, fontWeight: '800', color: '#111827', marginBottom: 12 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '800', color: '#4D96FF', marginBottom: 2 },
-  statLabel: { fontSize: 10, color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statsTitle: {
+    ...typography.label,
+    fontWeight: '800',
+    color: lightColors.text,
+    marginBottom: spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    ...typography.numeric,
+    fontSize: 18,
+    color: lightColors.primary,
+    marginBottom: 2,
+  },
+  statLabel: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   favIdeaBox: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: lightColors.inputBg,
     borderLeftWidth: 3,
-    borderLeftColor: '#4D96FF',
-    padding: 10,
-    borderRadius: 8,
+    borderLeftColor: lightColors.primary,
+    padding: spacing.md,
+    borderRadius: radius.sm,
   },
-  favIdeaLabel: { fontSize: 10, fontWeight: '800', color: '#6B7280', letterSpacing: 1, marginBottom: 4 },
-  favIdeaText: { fontSize: 13, color: '#111827', fontWeight: '600', lineHeight: 18 },
-  favIdeaCount: { fontSize: 11, color: '#10B981', fontWeight: '700', marginTop: 4 },
+  favIdeaLabel: {
+    ...typography.caption,
+    fontWeight: '800',
+    color: lightColors.textMuted,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  favIdeaText: {
+    ...typography.bodySm,
+    color: lightColors.text,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  favIdeaCount: {
+    ...typography.caption,
+    color: lightColors.success.text,
+    fontWeight: '700',
+    marginTop: spacing.xs,
+  },
   weekendBanner: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FCD34D',
+    backgroundColor: lightColors.warning.bg,
+    borderColor: lightColors.warning.border,
     borderWidth: 1,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
   },
-  weekendTitle: { fontSize: 14, fontWeight: '800', color: '#92400E', marginBottom: 4 },
-  weekendSub: { fontSize: 12, color: '#78350F' },
-  cardDone: { opacity: 0.6, borderColor: '#10B981', borderWidth: 1.5 },
-  ideaTextDone: { textDecorationLine: 'line-through', color: '#6B7280' },
-  iconBtnDone: { backgroundColor: '#10B981' },
-  doneHint: { marginTop: 8, fontSize: 12, color: '#10B981', fontWeight: '700' },
+  weekendTitle: {
+    ...typography.label,
+    fontWeight: '800',
+    color: lightColors.warning.text,
+    marginBottom: spacing.xs,
+  },
+  weekendSub: {
+    ...typography.caption,
+    color: lightColors.warning.text,
+  },
+  cardDone: {
+    opacity: 0.6,
+    borderColor: lightColors.success.solid,
+    borderWidth: 1.5,
+  },
+  ideaTextDone: {
+    textDecorationLine: 'line-through',
+    color: lightColors.textMuted,
+  },
+  iconBtnDone: {
+    backgroundColor: lightColors.success.solid,
+  },
+  doneHint: {
+    marginTop: spacing.sm,
+    ...typography.caption,
+    color: lightColors.success.text,
+    fontWeight: '700',
+  },
   goalCard: {
-    backgroundColor: 'white',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    borderColor: lightColors.border,
+    ...shadows.sm,
   },
-  goalCardAchieved: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
-  goalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  goalTitle: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  goalSubtitle: { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  goalPickBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: '#EEF2FF' },
-  goalPickBtnText: { fontSize: 12, fontWeight: '700', color: '#4338CA' },
-  goalBarBg: { height: 8, backgroundColor: '#E5E7EB', borderRadius: 4, overflow: 'hidden' },
-  goalBarFill: { height: 8, borderRadius: 4 },
-  goalTickRow: { flexDirection: 'row', gap: 4, marginTop: 8 },
-  goalTick: { flex: 1, height: 6, borderRadius: 3, backgroundColor: '#E5E7EB' },
-  goalTickOn: { backgroundColor: '#10B981' },
+  goalCardAchieved: {
+    backgroundColor: lightColors.success.bg,
+    borderColor: lightColors.success.solid,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  goalTitle: {
+    ...typography.label,
+    fontWeight: '800',
+    color: lightColors.text,
+  },
+  goalSubtitle: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    marginTop: 2,
+  },
+  goalPickBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: lightColors.primarySoft,
+  },
+  goalPickBtnText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: lightColors.primary,
+  },
+  goalBarBg: {
+    height: 8,
+    backgroundColor: lightColors.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  goalBarFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  goalTickRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  goalTick: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: lightColors.border,
+  },
+  goalTickOn: {
+    backgroundColor: lightColors.success.solid,
+  },
   aiInfoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderColor: '#93C5FD',
+    backgroundColor: lightColors.info.bg,
+    borderColor: lightColors.info.border,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 14,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
   },
-  aiInfoText: { flex: 1, fontSize: 12, color: '#1E40AF', fontWeight: '600' },
-  aiInfoDismiss: { fontSize: 14, color: '#1E40AF', fontWeight: '800', marginLeft: 8 },
+  aiInfoText: {
+    flex: 1,
+    ...typography.caption,
+    color: lightColors.info.text,
+    fontWeight: '700',
+  },
+  aiInfoDismiss: {
+    fontSize: 14,
+    color: lightColors.info.text,
+    fontWeight: '800',
+    marginLeft: spacing.sm,
+  },
+  aiInfoBannerSuccess: {
+    backgroundColor: lightColors.success.bg,
+    borderColor: lightColors.success.solid,
+  },
+  aiInfoTextSuccess: {
+    color: lightColors.success.text,
+  },
+  aiInfoBannerWarn: {
+    backgroundColor: lightColors.warning.bg,
+    borderColor: lightColors.warning.solid,
+  },
+  aiInfoTextWarn: {
+    color: lightColors.warning.text,
+  },
+  aiInfoBannerInfo: {
+    backgroundColor: lightColors.info.bg,
+    borderColor: lightColors.info.border,
+  },
+  aiInfoTextInfo: {
+    color: lightColors.info.text,
+  },
   todayPlanCard: {
-    backgroundColor: 'white',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 14,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    borderColor: lightColors.border,
+    ...shadows.sm,
   },
-  todayPlanHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  todayPlanTitle: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  todayPlanSub: { fontSize: 11, color: '#6B7280', marginTop: 2 },
-  todayPlanOpenBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#EEF2FF' },
-  todayPlanOpenBtnText: { fontSize: 11, color: '#4338CA', fontWeight: '800' },
-  todayPlanWeekBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#7c5cff', marginRight: 6 },
-  todayPlanWeekBtnText: { fontSize: 11, color: 'white', fontWeight: '800' },
+  todayPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  todayPlanTitle: {
+    ...typography.label,
+    fontWeight: '800',
+    color: lightColors.text,
+  },
+  todayPlanSub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    marginTop: 2,
+  },
+  todayPlanOpenBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: lightColors.primarySoft,
+  },
+  todayPlanOpenBtnText: {
+    ...typography.caption,
+    color: lightColors.primary,
+    fontWeight: '800',
+  },
+  todayPlanWeekBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: lightColors.secondary,
+    marginRight: spacing.xs,
+  },
+  todayPlanWeekBtnText: {
+    ...typography.caption,
+    color: lightColors.textInverse,
+    fontWeight: '800',
+  },
   todayPlanItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  todayPlanItemDone: { opacity: 0.65 },
+  todayPlanItemDone: {
+    opacity: 0.65,
+  },
   todayPlanCheck: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 2, borderColor: '#C7D2FE',
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'white',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: lightColors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: lightColors.surface,
   },
-  todayPlanCheckDone: { backgroundColor: '#10B981', borderColor: '#10B981' },
-  todayPlanCheckText: { fontSize: 12, color: 'white', fontWeight: '800' },
-  todayPlanCheckTextDone: { color: 'white' },
-  todayPlanItemText: { flex: 1, fontSize: 13, color: '#111827', fontWeight: '500', lineHeight: 18 },
-  todayPlanItemTextDone: { textDecorationLine: 'line-through', color: '#6B7280' },
-  todayPlanMore: { fontSize: 11, color: '#4338CA', fontWeight: '700', marginTop: 6, textAlign: 'center' },
+  todayPlanCheckDone: {
+    backgroundColor: lightColors.success.solid,
+    borderColor: lightColors.success.solid,
+  },
+  todayPlanCheckText: {
+    fontSize: 12,
+    color: lightColors.textInverse,
+    fontWeight: '800',
+  },
+  todayPlanCheckTextDone: {
+    color: lightColors.textInverse,
+  },
+  todayPlanItemText: {
+    flex: 1,
+    ...typography.label,
+    color: lightColors.text,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  todayPlanItemTextDone: {
+    textDecorationLine: 'line-through',
+    color: lightColors.textMuted,
+  },
+  todayPlanMore: {
+    ...typography.caption,
+    color: lightColors.primary,
+    fontWeight: '700',
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
   skeletonCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: lightColors.border,
   },
-  skeletonPulse: { alignItems: 'center', marginBottom: 14 },
-  skeletonIcon: { fontSize: 28, marginBottom: 4 },
-  skeletonTitle: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  skeletonSub: { fontSize: 11, color: '#6B7280', marginTop: 2 },
-  skeletonRow: { marginTop: 10 },
+  skeletonPulse: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  skeletonIcon: {
+    fontSize: 28,
+    marginBottom: spacing.xs,
+  },
+  skeletonTitle: {
+    ...typography.label,
+    fontWeight: '800',
+    color: lightColors.text,
+  },
+  skeletonSub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    marginTop: 2,
+  },
+  skeletonRow: {
+    marginTop: spacing.md,
+  },
   skeletonBar: {
     height: 12,
-    borderRadius: 6,
-    backgroundColor: '#E5E7EB',
+    borderRadius: radius.sm,
+    backgroundColor: lightColors.border,
   },
   toast: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-    marginBottom: 4,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
     borderWidth: 1,
   },
-  toastSuccess: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
-  toastWarn: { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' },
-  toastInfo: { backgroundColor: '#EFF6FF', borderColor: '#93C5FD' },
-  toastText: { fontSize: 13, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  toastSuccess: {
+    backgroundColor: lightColors.success.bg,
+    borderColor: lightColors.success.solid,
+  },
+  toastWarn: {
+    backgroundColor: lightColors.warning.bg,
+    borderColor: lightColors.warning.solid,
+  },
+  toastInfo: {
+    backgroundColor: lightColors.info.bg,
+    borderColor: lightColors.info.border,
+  },
+  toastText: {
+    ...typography.label,
+    fontWeight: '700',
+    color: lightColors.text,
+    textAlign: 'center',
+  },
   dailyCard: {
-    backgroundColor: 'white',
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 14,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
     borderWidth: 2,
-    borderColor: '#7c5cff',
-    shadowColor: '#7c5cff',
-    shadowOpacity: 0.12,
+    borderColor: lightColors.secondary,
+    ...shadows.md,
+    shadowColor: lightColors.secondary,
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
   },
   dailyCardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   dailyCardBadge: {
-    fontSize: 11,
+    ...typography.caption,
     fontWeight: '800',
-    color: '#7c5cff',
+    color: lightColors.secondary,
     letterSpacing: 1.2,
   },
-  dailyCardChev: { fontSize: 24, color: '#7c5cff', fontWeight: '300' },
+  dailyCardChev: {
+    fontSize: 24,
+    color: lightColors.secondary,
+    fontWeight: '300',
+  },
   dailyCardText: {
     fontSize: 15,
-    color: '#111827',
+    color: lightColors.text,
     fontWeight: '600',
     lineHeight: 22,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   dailyCardHint: {
-    fontSize: 11,
-    color: '#9CA3AF',
+    ...typography.caption,
+    color: lightColors.textMuted,
     fontStyle: 'italic',
   },
   moodEntryCard: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 14,
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
     borderWidth: 2,
-    borderColor: '#7c5cff',
+    borderColor: lightColors.secondary,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#7c5cff',
-    shadowOpacity: 0.12,
+    ...shadows.md,
+    shadowColor: lightColors.secondary,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
   },
-  moodEntryLeft: { flex: 1 },
+  moodEntryLeft: {
+    flex: 1,
+  },
   moodEntryBadge: {
-    fontSize: 11,
+    ...typography.caption,
     fontWeight: '800',
-    color: '#7c5cff',
+    color: lightColors.secondary,
     letterSpacing: 1.2,
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
-  moodEntryTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 4 },
-  moodEntrySub: { fontSize: 11, color: '#6B7280', fontWeight: '500', lineHeight: 15 },
-  moodEntryChips: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 4 },
-  moodChip: { fontSize: 18 },
-  moodChipText: { fontSize: 10, color: '#7c5cff', fontWeight: '700', marginLeft: 2 },
-  moodEntryChev: { fontSize: 26, color: '#7c5cff', fontWeight: '300', marginLeft: 8 },
-  pomodoroEntryCard: {
-    backgroundColor: '#fff',
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 14,
-    borderWidth: 2,
-    borderColor: '#EF4444',
+  moodEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  moodEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+    lineHeight: 15,
+  },
+  moodEntryChips: {
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#EF4444',
-    shadowOpacity: 0.1,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  moodChip: {
+    fontSize: 18,
+  },
+  moodChipText: {
+    fontSize: 10,
+    color: lightColors.secondary,
+    fontWeight: '700',
+    marginLeft: 2,
+  },
+  moodEntryChev: {
+    fontSize: 26,
+    color: lightColors.secondary,
+    fontWeight: '300',
+    marginLeft: spacing.sm,
+  },
+  pomodoroEntryCard: {
+    backgroundColor: lightColors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 2,
+    borderColor: lightColors.error.solid,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...shadows.md,
+    shadowColor: lightColors.error.solid,
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
   },
-  pomodoroEntryLeft: { flex: 1 },
+  pomodoroEntryLeft: {
+    flex: 1,
+  },
   pomodoroEntryBadge: {
-    fontSize: 11,
+    ...typography.caption,
     fontWeight: '800',
-    color: '#EF4444',
+    color: lightColors.error.solid,
     letterSpacing: 1.2,
-    marginBottom: 6,
+    marginBottom: spacing.xs,
   },
-  pomodoroEntryTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 4 },
-  pomodoroEntrySub: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
-  pomodoroEntryRight: { alignItems: 'center', marginLeft: 12 },
-  pomodoroEntryIcon: { fontSize: 32, marginBottom: 4 },
-  pomodoroEntryChev: { fontSize: 22, color: '#EF4444', fontWeight: '300' },
+  pomodoroEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  pomodoroEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  pomodoroEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  pomodoroEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  pomodoroEntryChev: {
+    fontSize: 22,
+    color: lightColors.error.solid,
+    fontWeight: '300',
+  },
   hooksEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.info.bg,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 2,
-    borderColor: '#0EA5E9',
+    borderColor: lightColors.info.solid,
   },
-  hooksEntryLeft: { flex: 1 },
-  hooksEntryBadge: { color: '#0EA5E9', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  hooksEntryTitle: { fontSize: 15, fontWeight: '800', color: '#0F172A', marginBottom: 4 },
-  hooksEntrySub: { fontSize: 11, color: '#475569', fontWeight: '500' },
-  hooksEntryRight: { alignItems: 'center', marginLeft: 12 },
-  hooksEntryIcon: { fontSize: 32, marginBottom: 4 },
-  hooksEntryChev: { fontSize: 22, color: '#0EA5E9', fontWeight: '300' },
+  hooksEntryLeft: {
+    flex: 1,
+  },
+  hooksEntryBadge: {
+    color: lightColors.info.text,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  hooksEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  hooksEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  hooksEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  hooksEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  hooksEntryChev: {
+    fontSize: 22,
+    color: lightColors.info.solid,
+    fontWeight: '300',
+  },
   calendarEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#0EA5E9',
+    borderColor: lightColors.info.solid,
   },
-  calendarEntryLeft: { flex: 1 },
-  calendarEntryBadge: { color: '#0EA5E9', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  calendarEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  calendarEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  calendarEntryRight: { alignItems: 'center', marginLeft: 12 },
-  calendarEntryIcon: { fontSize: 32, marginBottom: 4 },
-  calendarEntryChev: { fontSize: 22, color: '#0EA5E9', fontWeight: '300' },
+  calendarEntryLeft: {
+    flex: 1,
+  },
+  calendarEntryBadge: {
+    color: lightColors.info.text,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  calendarEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  calendarEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  calendarEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  calendarEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  calendarEntryChev: {
+    fontSize: 22,
+    color: lightColors.info.solid,
+    fontWeight: '300',
+  },
   repurposeEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: lightColors.success.solid,
   },
-  repurposeEntryLeft: { flex: 1 },
-  repurposeEntryBadge: { color: '#10B981', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  repurposeEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  repurposeEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  repurposeEntryRight: { alignItems: 'center', marginLeft: 12 },
-  repurposeEntryIcon: { fontSize: 32, marginBottom: 4 },
-  repurposeEntryChev: { fontSize: 22, color: '#10B981', fontWeight: '300' },
+  repurposeEntryLeft: {
+    flex: 1,
+  },
+  repurposeEntryBadge: {
+    color: lightColors.success.text,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  repurposeEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  repurposeEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  repurposeEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  repurposeEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  repurposeEntryChev: {
+    fontSize: 22,
+    color: lightColors.success.solid,
+    fontWeight: '300',
+  },
   contentSeriesEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#8B5CF6',
+    borderColor: lightColors.secondary,
   },
-  contentSeriesEntryLeft: { flex: 1 },
-  contentSeriesEntryBadge: { color: '#8B5CF6', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  contentSeriesEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  contentSeriesEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  contentSeriesEntryRight: { alignItems: 'center', marginLeft: 12 },
-  contentSeriesEntryIcon: { fontSize: 32, marginBottom: 4 },
-  contentSeriesEntryChev: { fontSize: 22, color: '#8B5CF6', fontWeight: '300' },
+  contentSeriesEntryLeft: {
+    flex: 1,
+  },
+  contentSeriesEntryBadge: {
+    color: lightColors.secondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  contentSeriesEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  contentSeriesEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  contentSeriesEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  contentSeriesEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  contentSeriesEntryChev: {
+    fontSize: 22,
+    color: lightColors.secondary,
+    fontWeight: '300',
+  },
   personaEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#EC4899',
+    borderColor: lightColors.accent,
   },
-  personaEntryLeft: { flex: 1 },
-  personaEntryBadge: { color: '#EC4899', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  personaEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  personaEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  personaEntryRight: { alignItems: 'center', marginLeft: 12 },
-  personaEntryIcon: { fontSize: 32, marginBottom: 4 },
-  personaEntryChev: { fontSize: 22, color: '#EC4899', fontWeight: '300' },
+  personaEntryLeft: {
+    flex: 1,
+  },
+  personaEntryBadge: {
+    color: lightColors.accent,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  personaEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  personaEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  personaEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  personaEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  personaEntryChev: {
+    fontSize: 22,
+    color: lightColors.accent,
+    fontWeight: '300',
+  },
   performanceEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: lightColors.warning.solid,
   },
-  performanceEntryLeft: { flex: 1 },
-  performanceEntryBadge: { color: '#F59E0B', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  performanceEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  performanceEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  performanceEntryRight: { alignItems: 'center', marginLeft: 12 },
-  performanceEntryIcon: { fontSize: 32, marginBottom: 4 },
-  performanceEntryChev: { fontSize: 22, color: '#F59E0B', fontWeight: '300' },
+  performanceEntryLeft: {
+    flex: 1,
+  },
+  performanceEntryBadge: {
+    color: lightColors.warning.text,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  performanceEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  performanceEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  performanceEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  performanceEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  performanceEntryChev: {
+    fontSize: 22,
+    color: lightColors.warning.solid,
+    fontWeight: '300',
+  },
   ideaBankEntryCard: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 10,
+    backgroundColor: lightColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#06B6D4',
+    borderColor: lightColors.info.solid,
   },
-  ideaBankEntryLeft: { flex: 1 },
-  ideaBankEntryBadge: { color: '#06B6D4', fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  ideaBankEntryTitle: { fontSize: 15, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  ideaBankEntrySub: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
-  ideaBankEntryRight: { alignItems: 'center', marginLeft: 12 },
-  ideaBankEntryIcon: { fontSize: 32, marginBottom: 4 },
-  ideaBankEntryChev: { fontSize: 22, color: '#06B6D4', fontWeight: '300' },
+  ideaBankEntryLeft: {
+    flex: 1,
+  },
+  ideaBankEntryBadge: {
+    color: lightColors.info.solid,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  ideaBankEntryTitle: {
+    ...typography.h3,
+    color: lightColors.text,
+    marginBottom: spacing.xs,
+  },
+  ideaBankEntrySub: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    fontWeight: '500',
+  },
+  ideaBankEntryRight: {
+    alignItems: 'center',
+    marginLeft: spacing.md,
+  },
+  ideaBankEntryIcon: {
+    fontSize: 32,
+    marginBottom: spacing.xs,
+  },
+  ideaBankEntryChev: {
+    fontSize: 22,
+    color: lightColors.info.solid,
+    fontWeight: '300',
+  },
+  dailyCardOpenBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginTop: spacing.sm,
+  },
+  dailyCardOpenBtnText: {
+    ...typography.caption,
+    color: lightColors.textInverse,
+    fontWeight: '800',
+  },
+  timeWidget: {
+    borderRadius: 20,
+    borderWidth: 2,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.md,
+  },
+  timeWidgetGradient: {
+    padding: spacing.lg,
+  },
+  timeWidgetRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  timeWidgetCol: {
+    flex: 1,
+    paddingVertical: 4,
+  },
+  timeWidgetDivider: {
+    width: 1,
+    marginHorizontal: spacing.md,
+    alignSelf: 'stretch',
+  },
+  timeWidgetBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginBottom: 6,
+  },
+  timeWidgetTime: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: lightColors.text,
+    letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
+  },
+  timeWidgetDate: {
+    fontSize: 11,
+    color: lightColors.textMuted,
+    fontWeight: '600',
+    marginTop: 4,
+    lineHeight: 14,
+  },
+  timeWidgetSlotsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  timeWidgetSlot: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: lightColors.border,
+    backgroundColor: lightColors.surface,
+  },
+  timeWidgetSlotLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: lightColors.text,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  timeWidgetSlotRange: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: lightColors.textMuted,
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+  },
+  timeWidgetSlotBar: {
+    height: 4,
+    backgroundColor: lightColors.border,
+    borderRadius: 2,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  timeWidgetSlotBarFill: {
+    height: 4,
+    borderRadius: 2,
+  },
+  timeWidgetCta: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  timeWidgetCtaText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+    letterSpacing: 0.4,
+  },
 });
+
+type InlineNichePickerProps = {
+  currentNiche: string | null;
+  niches: { id: string; icon: string; color: string; description?: string }[];
+  onClose: () => void;
+  onPick: (id: NicheId) => void;
+  title: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  t: any;
+};
+
+function InlineNichePicker({ currentNiche, niches, onClose, onPick, title, t }: InlineNichePickerProps) {
+  const { height } = Dimensions.get('window');
+  const sheetHeight = Math.min(Math.round(height * 0.78), 640);
+  const [plan, setPlan] = useState<UserPlan>('free');
+  useEffect(() => {
+    getUserPlan().then(setPlan);
+  }, []);
+  const isPro = plan !== 'free';
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        elevation: 24,
+        justifyContent: 'flex-end',
+      }}
+    >
+      <Pressable
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: lightColors.overlay,
+        }}
+        onPress={onClose}
+      />
+      <View
+        style={{
+          backgroundColor: lightColors.surface,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: 24,
+          height: sheetHeight,
+          ...Platform.select({
+            web: { boxShadow: '0 -8px 24px rgba(15, 23, 42, 0.18)' },
+            default: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 12,
+            },
+          }),
+        }}
+      >
+        <View
+          style={{
+            alignSelf: 'center',
+            width: 40,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: lightColors.border,
+            marginBottom: 12,
+          }}
+        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 6,
+          }}
+        >
+          <Text style={{ fontSize: 20, fontWeight: '800', color: lightColors.text }}>{title}</Text>
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: lightColors.inputBg,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 14, color: lightColors.text, fontWeight: '700' }}>✕</Text>
+          </Pressable>
+        </View>
+        <Text
+          style={{
+            fontSize: 13,
+            color: lightColors.textMuted,
+            marginBottom: 12,
+            lineHeight: 18,
+          }}
+        >
+          İçerik fikirleri ve planlar bu nişe göre hazırlanır.
+        </Text>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
+          {niches.map((n, idx) => {
+            const isSel = currentNiche === n.id;
+            const isLocked = !isPro && idx >= FREE_NICHE_LIMIT;
+            return (
+              <Pressable
+                key={n.id}
+                onPress={() => onPick(n.id as NicheId)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 10,
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: isSel ? n.color : lightColors.border,
+                  backgroundColor: isSel ? n.color + '14' : lightColors.surface,
+                  marginBottom: 8,
+                  gap: 12,
+                  opacity: isLocked ? 0.55 : 1,
+                }}
+              >
+                <NicheImage nicheId={n.id} size={56} borderRadius={12} />
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: lightColors.text }}>
+                      {t(`niches.${n.id}`, n.id)}
+                    </Text>
+                    {isLocked && (
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, backgroundColor: '#F5A524', borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFFFFF' }}>PRO</Text>
+                      </View>
+                    )}
+                  </View>
+                  {n.description && (
+                    <Text style={{ fontSize: 11, color: lightColors.textMuted, marginTop: 2 }}>
+                      {n.description}
+                    </Text>
+                  )}
+                </View>
+                {isSel && (
+                  <Text style={{ fontSize: 22, fontWeight: '800', marginLeft: 6, color: n.color }}>
+                    ✓
+                  </Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+type InlineGoalPickerProps = {
+  currentTarget: WeeklyGoalTarget;
+  onClose: () => void;
+  onPick: (n: WeeklyGoalTarget) => void;
+};
+
+function InlineGoalPicker({ currentTarget, onClose, onPick }: InlineGoalPickerProps) {
+  const options: WeeklyGoalTarget[] = [3, 5, 7];
+  const meta: Record<WeeklyGoalTarget, { label: string; emoji: string; sub: string }> = {
+    3: { label: '3 fikir', emoji: '🌱', sub: 'Hafif başla — sürdürülebilir' },
+    5: { label: '5 fikir', emoji: '🎯', sub: 'Dengeli — haftalık hedef' },
+    7: { label: '7 fikir', emoji: '🚀', sub: 'Yoğun — her gün üret' },
+  };
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        elevation: 24,
+        justifyContent: 'flex-end',
+      }}
+    >
+      <Pressable
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: lightColors.overlay,
+        }}
+        onPress={onClose}
+      />
+      <View
+        style={{
+          backgroundColor: lightColors.surface,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          paddingHorizontal: 20,
+          paddingTop: 12,
+          paddingBottom: 24,
+          ...Platform.select({
+            web: { boxShadow: '0 -8px 24px rgba(15, 23, 42, 0.18)' },
+            default: {
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.18,
+              shadowRadius: 12,
+            },
+          }),
+        }}
+      >
+        <View
+          style={{
+            alignSelf: 'center',
+            width: 40,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: lightColors.border,
+            marginBottom: 12,
+          }}
+        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 6,
+          }}
+        >
+          <Text style={{ fontSize: 20, fontWeight: '800', color: lightColors.text }}>
+            🎯 Haftalık Hedef
+          </Text>
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: lightColors.inputBg,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 14, color: lightColors.text, fontWeight: '700' }}>✕</Text>
+          </Pressable>
+        </View>
+        <Text
+          style={{
+            fontSize: 13,
+            color: lightColors.textMuted,
+            marginBottom: 12,
+            lineHeight: 18,
+          }}
+        >
+          Bu hafta kaç fikir üretmek istiyorsun?
+        </Text>
+        {options.map((n) => {
+          const isSel = currentTarget === n;
+          const m = meta[n];
+          return (
+            <Pressable
+              key={n}
+              onPress={() => onPick(n)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: 14,
+                borderRadius: 14,
+                borderWidth: 2,
+                borderColor: isSel ? lightColors.primary : lightColors.border,
+                backgroundColor: isSel ? lightColors.primarySoft : lightColors.surface,
+                marginBottom: 8,
+                gap: 12,
+              }}
+            >
+              <Text style={{ fontSize: 28 }}>{m.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: lightColors.text }}>
+                  {m.label}
+                </Text>
+                <Text style={{ fontSize: 11, color: lightColors.textMuted, marginTop: 2 }}>
+                  {m.sub}
+                </Text>
+              </View>
+              {isSel && (
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: '800',
+                    marginLeft: 6,
+                    color: lightColors.primary,
+                  }}
+                >
+                  ✓
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}

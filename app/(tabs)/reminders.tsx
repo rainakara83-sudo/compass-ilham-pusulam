@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
   REMINDER_TEMPLATES,
@@ -16,6 +16,7 @@ import {
   toggleReminderEnabled,
   updateReminder,
 } from '../../services/notificationService';
+import PlanBadge from '../../components/PlanBadge';
 
 const WEEKDAY_LABELS = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct'];
 
@@ -40,8 +41,14 @@ export default function RemindersScreen() {
   const [once, setOnce] = useState(false);
   const [permission, setPermission] = useState<boolean>(false);
   const [scheduledCount, setScheduledCount] = useState<number>(0);
+  const [planRefresh, setPlanRefresh] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [weeklySummary, setWeeklySummary] = useState<boolean>(false);
+  const [showWeeklyModal, setShowWeeklyModal] = useState<boolean>(false);
+  const [weeklyDays, setWeeklyDays] = useState<number[]>([1]);
+  const [weeklyHour, setWeeklyHour] = useState<number>(8);
+  const [weeklyMinute, setWeeklyMinute] = useState<number>(0);
+  const [weeklyBody, setWeeklyBody] = useState<string>('Yeni haftanın fikirleri hazır. Uygulamayı aç ve göz at!');
 
   const refresh = async () => {
     setReminders(await loadReminders());
@@ -56,6 +63,7 @@ export default function RemindersScreen() {
       setPermission(granted);
       await refresh();
     })();
+    setPlanRefresh((x) => x + 1);
   }, []);
 
   const startEdit = (r: Reminder) => {
@@ -160,22 +168,64 @@ export default function RemindersScreen() {
   const onTest = async () => {
     const ok = await sendTestNotification();
     if (!ok) {
-      Alert.alert(t('reminders.permissionDenied'));
+      Alert.alert(
+        t('reminders.permissionDenied'),
+        'Tarayıcında bildirim iznini kontrol et. Web için: adres çubuğundaki kilit/ayar simgesinden izin ver.'
+      );
+    } else {
+      Alert.alert('🔔 Test bildirimi gönderildi', 'Birkaç saniye içinde görünecek!');
     }
   };
 
   const onToggleWeekly = async (next: boolean) => {
-    const ok = await setWeeklySummaryEnabled(next);
-    if (!ok && next) {
+    if (next) {
+      setShowWeeklyModal(true);
+    } else {
+      Alert.alert(
+        'Haftalık Hatırlatmayı Sil',
+        'Hatırlatmayı silmek istiyor musun?',
+        [
+          { text: 'Vazgeç', style: 'cancel' },
+          {
+            text: 'Sil',
+            style: 'destructive',
+            onPress: async () => {
+              const ok = await setWeeklySummaryEnabled(false);
+              if (ok) setWeeklySummary(false);
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const saveWeekly = async () => {
+    if (weeklyDays.length === 0) {
+      Alert.alert('Lütfen en az bir gün seç');
+      return;
+    }
+    const ok = await setWeeklySummaryEnabled(true);
+    if (!ok) {
       Alert.alert(t('reminders.permissionDenied'));
       return;
     }
-    setWeeklySummary(next);
+    setWeeklySummary(true);
+    setShowWeeklyModal(false);
+  };
+
+  const toggleWeeklyDay = (day: number) => {
+    setWeeklyDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
   };
 
   return (
+    <>
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
-      <Text style={styles.title}>{t('reminders.title')}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.title}>{t('reminders.title')}</Text>
+        <PlanBadge size="sm" refreshKey={planRefresh} />
+      </View>
 
       <View style={styles.statusCard}>
         <View style={[styles.statusDot, { backgroundColor: permission ? '#10B981' : '#DC2626' }]} />
@@ -195,7 +245,11 @@ export default function RemindersScreen() {
       >
         <View style={{ flex: 1 }}>
           <Text style={styles.weeklyTitle}>📅 Haftalık özet bildirimi</Text>
-          <Text style={styles.weeklySub}>Her Pazartesi 08:00'de yeni haftanın fikirleri için hatırlatma</Text>
+          <Text style={styles.weeklySub}>
+            {weeklySummary
+              ? 'Her Pazartesi 08:00\'de yeni haftanın fikirleri için hatırlatma (açık)'
+              : 'Detayları görmek için tıkla'}
+          </Text>
         </View>
         <Switch
           value={weeklySummary}
@@ -258,17 +312,25 @@ export default function RemindersScreen() {
 
         <Text style={styles.subLabel}>{t('reminders.time')}</Text>
         <View style={styles.timeRow}>
-          <Pressable onPress={() => setHour((h) => (h + 1) % 24)} style={styles.timeBtn}>
-            <Text style={styles.timeArrow}>↑</Text>
+          <View style={styles.timeBtn}>
+            <Pressable onPress={() => setHour((h) => (h + 1) % 24)} hitSlop={8}>
+              <Text style={styles.timeArrow}>↑</Text>
+            </Pressable>
             <Text style={styles.timeValue}>{String(hour).padStart(2, '0')}</Text>
-            <Text style={styles.timeArrow}>↓</Text>
-          </Pressable>
+            <Pressable onPress={() => setHour((h) => (h - 1 + 24) % 24)} hitSlop={8}>
+              <Text style={styles.timeArrow}>↓</Text>
+            </Pressable>
+          </View>
           <Text style={styles.colon}>:</Text>
-          <Pressable onPress={() => setMinute((m) => (m + 5) % 60)} style={styles.timeBtn}>
-            <Text style={styles.timeArrow}>↑</Text>
+          <View style={styles.timeBtn}>
+            <Pressable onPress={() => setMinute((m) => (m + 5) % 60)} hitSlop={8}>
+              <Text style={styles.timeArrow}>↑</Text>
+            </Pressable>
             <Text style={styles.timeValue}>{String(minute).padStart(2, '0')}</Text>
-            <Text style={styles.timeArrow}>↓</Text>
-          </Pressable>
+            <Pressable onPress={() => setMinute((m) => (m - 5 + 60) % 60)} hitSlop={8}>
+              <Text style={styles.timeArrow}>↓</Text>
+            </Pressable>
+          </View>
         </View>
 
         {!once && (
@@ -350,11 +412,81 @@ export default function RemindersScreen() {
         );
       })}
     </ScrollView>
+
+    <Modal visible={showWeeklyModal} transparent animationType="slide" onRequestClose={() => setShowWeeklyModal(false)}>
+      <Pressable style={styles.modalBackdrop} onPress={() => setShowWeeklyModal(false)}>
+        <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>📅 Haftalık Hatırlatma Ayarla</Text>
+          <Text style={styles.modalHint}>Hangi gün ve saatte hatırlatma almak istiyorsun?</Text>
+
+          <Text style={styles.subLabel}>Günler (birden fazla seçebilirsin)</Text>
+          <View style={styles.weekDaysRow}>
+            {WEEKDAY_LABELS.map((label, i) => {
+              const day = i + 1;
+              const active = weeklyDays.includes(day);
+              return (
+                <Pressable
+                  key={day}
+                  onPress={() => toggleWeeklyDay(day)}
+                  style={[styles.weekDayChip, active && styles.weekDayChipActive]}
+                >
+                  <Text style={[styles.weekDayText, active && styles.weekDayTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.subLabel}>Saat</Text>
+          <View style={styles.timeRow}>
+            <View style={styles.timeBtn}>
+              <Pressable onPress={() => setWeeklyHour((h) => (h + 1) % 24)} hitSlop={8}>
+                <Text style={styles.timeArrow}>↑</Text>
+              </Pressable>
+              <Text style={styles.timeValue}>{String(weeklyHour).padStart(2, '0')}</Text>
+              <Pressable onPress={() => setWeeklyHour((h) => (h - 1 + 24) % 24)} hitSlop={8}>
+                <Text style={styles.timeArrow}>↓</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.colon}>:</Text>
+            <View style={styles.timeBtn}>
+              <Pressable onPress={() => setWeeklyMinute((m) => (m + 5) % 60)} hitSlop={8}>
+                <Text style={styles.timeArrow}>↑</Text>
+              </Pressable>
+              <Text style={styles.timeValue}>{String(weeklyMinute).padStart(2, '0')}</Text>
+              <Pressable onPress={() => setWeeklyMinute((m) => (m - 5 + 60) % 60)} hitSlop={8}>
+                <Text style={styles.timeArrow}>↓</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Text style={styles.subLabel}>Mesaj</Text>
+          <TextInput
+            style={styles.input}
+            value={weeklyBody}
+            onChangeText={setWeeklyBody}
+            placeholder="Hatırlatma mesajı"
+            placeholderTextColor="#9CA3AF"
+            maxLength={100}
+          />
+
+          <View style={styles.modalBtnRow}>
+            <Pressable style={[styles.addBtn, styles.cancelBtn]} onPress={() => setShowWeeklyModal(false)}>
+              <Text style={styles.cancelBtnText}>İptal</Text>
+            </Pressable>
+            <Pressable style={styles.addBtn} onPress={saveWeekly}>
+              <Text style={styles.addBtnText}>Kaydet</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 50, marginBottom: 16 },
   statusCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 12, borderRadius: 12, marginBottom: 10, gap: 8 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
@@ -411,4 +543,15 @@ const styles = StyleSheet.create({
   doneBtnText: { color: '#10B981', fontWeight: '800' },
   delBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center' },
   delBtnText: { color: '#DC2626', fontWeight: '700' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#FAFCF6', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 22, paddingBottom: 36 },
+  modalHandle: { width: 48, height: 5, borderRadius: 3, backgroundColor: '#C5D2A0', alignSelf: 'center', marginBottom: 14 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#111827', marginBottom: 6 },
+  modalHint: { fontSize: 13, color: '#6B7280', marginBottom: 14 },
+  weekDaysRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
+  weekDayChip: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0F4ED', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#C5D2A0' },
+  weekDayChipActive: { backgroundColor: '#4D96FF', borderColor: '#4D96FF' },
+  weekDayText: { fontSize: 12, fontWeight: '700', color: '#2F3B25' },
+  weekDayTextActive: { color: 'white' },
+  modalBtnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
 });

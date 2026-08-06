@@ -110,18 +110,28 @@ export const scheduleReminder = async (reminder: Reminder): Promise<string | nul
       });
     } else {
       for (const weekday of reminder.weekdays) {
+        const trigger: Notifications.NotificationTriggerInput =
+          Platform.OS === 'ios'
+            ? {
+                type: SchedulableTriggerInputTypes.CALENDAR,
+                repeats: true,
+                weekday,
+                hour: reminder.hour,
+                minute: reminder.minute,
+              }
+            : {
+                type: SchedulableTriggerInputTypes.WEEKLY,
+                weekday,
+                hour: reminder.hour,
+                minute: reminder.minute,
+              };
         await Notifications.scheduleNotificationAsync({
           content: {
             title: reminder.title ?? 'İçerik zamanı! ✨',
             body: reminder.body ?? 'Bugün paylaşımını planlamayı unutma.',
             categoryIdentifier: Platform.OS === 'ios' ? 'reminder' : undefined,
           },
-          trigger: {
-            type: SchedulableTriggerInputTypes.WEEKLY,
-            weekday,
-            hour: reminder.hour,
-            minute: reminder.minute,
-          },
+          trigger,
         });
       }
     }
@@ -235,6 +245,23 @@ export const incrementReminderCompletion = async (id: string): Promise<Reminder 
 };
 
 export const sendTestNotification = async (): Promise<boolean> => {
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        let perm = window.Notification.permission;
+        if (perm === 'default') perm = await window.Notification.requestPermission();
+        if (perm === 'granted') {
+          new window.Notification('Bu bir test bildirimi 🔔', {
+            body: 'Hatırlatmaların doğru çalışıyor!',
+          });
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('web notification error', e);
+    }
+    return false;
+  }
   const granted = await requestNotificationPermission();
   if (!granted) return false;
   try {
@@ -283,17 +310,27 @@ export const scheduleWeeklySummary = async (): Promise<boolean> => {
       await Notifications.cancelScheduledNotificationAsync(weeklySummaryId);
       weeklySummaryId = null;
     }
+    const trigger: Notifications.NotificationTriggerInput =
+      Platform.OS === 'ios'
+        ? {
+            type: SchedulableTriggerInputTypes.CALENDAR,
+            repeats: true,
+            weekday: 1,
+            hour: 8,
+            minute: 0,
+          }
+        : {
+            type: SchedulableTriggerInputTypes.WEEKLY,
+            weekday: 1,
+            hour: 8,
+            minute: 0,
+          };
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: '📅 Haftalık içerik özeti',
         body: 'Yeni haftanın fikirleri hazır. Uygulamayı aç ve göz at!',
       },
-      trigger: {
-        type: SchedulableTriggerInputTypes.WEEKLY,
-        weekday: 1,
-        hour: 8,
-        minute: 0,
-      },
+      trigger,
     });
     weeklySummaryId = id;
     return true;

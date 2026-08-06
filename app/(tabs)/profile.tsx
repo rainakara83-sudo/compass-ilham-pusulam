@@ -8,21 +8,26 @@ import {
   ContentGoal,
   ExperienceLevel,
   Stats,
+  addStoredNiche,
   clearWeeklyGoalProgress,
   getAccountCreatedAt,
+  getActiveNiche,
   getDoneIdeas,
   getExperience,
   getFavorites,
   getGoal,
   getSchedule,
   getStats,
-  getStoredNiche,
+  getStoredNiches,
   getStreak,
   getStreakBest,
-  setStoredNiche,
+  removeStoredNiche,
+  setActiveNiche,
 } from '../../services/storage';
+import { NicheImage } from '../../components/NicheImage';
+import PlanBadge from '../../components/PlanBadge';
 
-type Niche = { id: string; icon: string; color: string };
+type Niche = { id: string; icon: string; color: string; image?: string };
 
 const LEVEL_META: Record<ExperienceLevel, { icon: string; label: string; color: string }> = {
   beginner: { icon: '🌱', label: 'Yeni başlıyorum', color: '#10B981' },
@@ -93,6 +98,8 @@ export default function ProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const [niche, setNiche] = useState<NicheId | null>(null);
+  const [nichesList, setNichesList] = useState<NicheId[]>([]);
+  const [showNicheAdd, setShowNicheAdd] = useState(false);
   const [experience, setExperience] = useState<ExperienceLevel | null>(null);
   const [goal, setGoal] = useState<ContentGoal | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -104,11 +111,13 @@ export default function ProfileScreen() {
   const [showNichePicker, setShowNichePicker] = useState(false);
   const [planStats, setPlanStats] = useState({ planned: 0, done: 0, upcoming: 0 });
   const [nextPlanned, setNextPlanned] = useState<{ text: string; date: string } | null>(null);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const [n, e, g, s, st, favs, done, best, joined, sched] = await Promise.all([
-        getStoredNiche(),
+      const [list, active, e, g, s, st, favs, done, best, joined, sched] = await Promise.all([
+        getStoredNiches(),
+        getActiveNiche(),
         getExperience(),
         getGoal(),
         getStats(),
@@ -119,7 +128,8 @@ export default function ProfileScreen() {
         getAccountCreatedAt(),
         getSchedule(),
       ]);
-      setNiche(n);
+      setNichesList(list);
+      setNiche(active ?? list[0] ?? null);
       setExperience(e);
       setGoal(g);
       setStats(s);
@@ -137,6 +147,7 @@ export default function ProfileScreen() {
       });
       setNextPlanned(upcoming[0] ? { text: upcoming[0].text, date: upcoming[0].date } : null);
     })();
+    setPlanRefresh((x) => x + 1);
   }, []);
 
   const nicheData = (niches as Niche[]).find((x) => x.id === niche);
@@ -171,7 +182,7 @@ export default function ProfileScreen() {
     }
     Alert.alert(
       'Nişini değiştir',
-      'Mevcut nişini değiştirirsen bu haftaki fikirler ve haftalık hedef ilerlemen sıfırlanır. Geçmiş haftalar, favoriler ve üretildi listesi korunur.',
+      'Aktif nişini değiştirirsen bu haftaki fikirler ve haftalık hedef ilerlemen sıfırlanır. Geçmiş haftalar, favoriler ve üretildi listesi korunur.',
       [
         { text: 'Vazgeç', style: 'cancel' },
         { text: 'Niş Seç', onPress: () => setShowNichePicker(true) },
@@ -182,27 +193,69 @@ export default function ProfileScreen() {
   const onPickNiche = async (id: string) => {
     setShowNichePicker(false);
     if (id === niche) return;
-    await setStoredNiche(id as NicheId);
+    await setActiveNiche(id as NicheId);
     await clearWeeklyGoalProgress();
     setNiche(id as NicheId);
+    const updated = await getStoredNiches();
+    setNichesList(updated);
     Alert.alert(
-      'Niş değişti ✨',
-      'Yeni nişin kaydedildi. Ana sayfaya döndüğünde fikirler yenilenecek.',
+      'Aktif niş değişti ✨',
+      'Yeni aktif nişin kaydedildi. Ana sayfaya döndüğünde fikirler yenilenecek.',
       [{ text: 'Tamam', onPress: () => router.replace('/(tabs)') }]
     );
+  };
+
+  const onAddNiche = async (id: string) => {
+    setShowNicheAdd(false);
+    if (nichesList.includes(id as NicheId)) {
+      await setActiveNiche(id as NicheId);
+      setNiche(id as NicheId);
+      return;
+    }
+    await addStoredNiche(id as NicheId);
+    const updated = await getStoredNiches();
+    setNichesList(updated);
+    Alert.alert('Niş eklendi', `${t(`niches.${id}`, id)} artık nişlerin arasında.`);
+  };
+
+  const onRemoveNiche = (id: string) => {
+    if (nichesList.length <= 1) {
+      Alert.alert('En az 1 niş', 'En az bir nişin olmalı. Önce yeni bir niş ekleyebilirsin.');
+      return;
+    }
+    Alert.alert('Nişi kaldır', `${t(`niches.${id}`, id)} nişini kaldırmak istediğine emin misin?`, [
+      { text: 'Vazgeç', style: 'cancel' },
+      {
+        text: 'Kaldır',
+        style: 'destructive',
+        onPress: async () => {
+          await removeStoredNiche(id as NicheId);
+          const updated = await getStoredNiches();
+          setNichesList(updated);
+          if (id === niche) {
+            setNiche(updated[0] ?? null);
+            await clearWeeklyGoalProgress();
+          }
+        },
+      },
+    ]);
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Profil</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.title}>Profil</Text>
+            <PlanBadge size="sm" refreshKey={planRefresh} />
+          </View>
           <Text style={styles.subtitle}>Senin içerik koçun</Text>
         </View>
       </View>
 
       <View style={[styles.identityCard, { borderColor: nicheColor }]}>
-        <View style={[styles.avatar, { backgroundColor: nicheColor }]}>
+        <NicheImage nicheId={niche} size={64} borderRadius={20} />
+        <View style={[styles.avatar, { backgroundColor: nicheColor, display: 'none' }]}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
@@ -217,6 +270,46 @@ export default function ProfileScreen() {
           <Text style={styles.identityEditText}>Değiştir</Text>
         </Pressable>
       </View>
+
+      {nichesList.length > 0 && (
+        <View style={styles.nichesPanel}>
+          <View style={styles.nichesPanelHeader}>
+            <Text style={styles.nichesPanelTitle}>Nişlerin ({nichesList.length})</Text>
+            <Pressable onPress={() => setShowNicheAdd(true)} style={styles.nichesAddBtn}>
+              <Text style={styles.nichesAddBtnText}>+ Ekle</Text>
+            </Pressable>
+          </View>
+          <View style={styles.nichesChipRow}>
+            {nichesList.map((id) => {
+              const n = (niches as Niche[]).find((x) => x.id === id);
+              const isActive = id === niche;
+              return (
+                <View
+                  key={id}
+                  style={[
+                    styles.nicheChip,
+                    { borderColor: n?.color ?? '#E5E7EB', backgroundColor: isActive ? (n?.color ?? '#4D96FF') + '18' : 'white' },
+                  ]}
+                >
+                  <Pressable
+                    onPress={() => onPickNiche(id)}
+                    onLongPress={() => onRemoveNiche(id)}
+                    delayLongPress={500}
+                    style={styles.nicheChipInner}
+                  >
+                    <Text style={styles.nicheChipIcon}>{n?.icon ?? '✨'}</Text>
+                    <Text style={[styles.nicheChipLabel, isActive && { color: n?.color, fontWeight: '800' }]}>
+                      {t(`niches.${id}`, id)}
+                    </Text>
+                    {isActive && <Text style={[styles.nicheChipBadge, { color: n?.color }]}>AKTİF</Text>}
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+          <Text style={styles.nichesHint}>💡 Aktif nişi değiştirmek için tıkla · kaldırmak için basılı tut</Text>
+        </View>
+      )}
 
       <View style={styles.gridWrap}>
         {tiles.map((t, i) => (
@@ -413,13 +506,14 @@ export default function ProfileScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Yeni nişini seç</Text>
+              <Text style={styles.modalTitle}>Aktif nişini seç</Text>
               <Pressable onPress={() => setShowNichePicker(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalGrid}>
               {(niches as Niche[]).map((n) => {
+                const inList = nichesList.includes(n.id as NicheId);
                 const isSel = niche === n.id;
                 return (
                   <Pressable
@@ -427,15 +521,50 @@ export default function ProfileScreen() {
                     onPress={() => onPickNiche(n.id)}
                     style={[
                       styles.modalCard,
-                      { borderColor: isSel ? n.color : '#E5E7EB', backgroundColor: isSel ? n.color + '15' : 'white' },
+                      { borderColor: isSel ? n.color : inList ? '#E5E7EB' : '#FCD34D', backgroundColor: isSel ? n.color + '15' : 'white' },
                     ]}
                   >
                     <Text style={styles.modalIcon}>{n.icon}</Text>
                     <Text style={styles.modalLabel}>{t(`niches.${n.id}`, n.id)}</Text>
-                    {isSel && <Text style={[styles.modalCheck, { color: n.color }]}>✓ Şu anki</Text>}
+                    {isSel && <Text style={[styles.modalCheck, { color: n.color }]}>✓ Aktif</Text>}
+                    {!inList && <Text style={styles.modalHint}>Ekle + aktif yap</Text>}
                   </Pressable>
                 );
               })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showNicheAdd} animationType="slide" transparent onRequestClose={() => setShowNicheAdd(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Yeni niş ekle</Text>
+              <Pressable onPress={() => setShowNicheAdd(false)} style={styles.modalClose}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.modalGrid}>
+              {(niches as Niche[])
+                .filter((n) => !nichesList.includes(n.id as NicheId))
+                .map((n) => (
+                  <Pressable
+                    key={n.id}
+                    onPress={() => onAddNiche(n.id)}
+                    style={[
+                      styles.modalCard,
+                      { borderColor: n.color, backgroundColor: n.color + '0A' },
+                    ]}
+                  >
+                    <Text style={styles.modalIcon}>{n.icon}</Text>
+                    <Text style={styles.modalLabel}>{t(`niches.${n.id}`, n.id)}</Text>
+                    <Text style={[styles.modalCheck, { color: n.color }]}>+ Ekle</Text>
+                  </Pressable>
+                ))}
+              {(niches as Niche[]).filter((n) => !nichesList.includes(n.id as NicheId)).length === 0 && (
+                <Text style={styles.modalEmptyText}>Tüm nişleri zaten ekledin 🎉</Text>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -445,7 +574,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 50, marginBottom: 16 },
   title: { fontSize: 24, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
@@ -619,6 +748,35 @@ const styles = StyleSheet.create({
   commentsTitle: { fontSize: 15, fontWeight: '800', color: '#111827', marginBottom: 4 },
   commentsSub: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
   commentsArrow: { fontSize: 28, color: '#9CA3AF', fontWeight: '300', marginLeft: 12 },
+  nichesPanel: {
+    backgroundColor: 'white',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  nichesPanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  nichesPanelTitle: { fontSize: 13, fontWeight: '800', color: '#111827', textTransform: 'uppercase', letterSpacing: 0.5 },
+  nichesAddBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#4D96FF', borderRadius: 8 },
+  nichesAddBtnText: { color: 'white', fontWeight: '700', fontSize: 12 },
+  nichesChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  nicheChip: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nicheChipInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nicheChipIcon: { fontSize: 16 },
+  nicheChipLabel: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  nicheChipBadge: { fontSize: 9, fontWeight: '900', letterSpacing: 0.6 },
+  nichesHint: { fontSize: 11, color: '#6B7280', marginTop: 10, fontStyle: 'italic' },
+  modalHint: { fontSize: 10, color: '#92400E', fontWeight: '700', marginTop: 4 },
+  modalEmptyText: { color: '#6B7280', textAlign: 'center', padding: 20, fontSize: 13 },
   collectionsCard: {
     flexDirection: 'row',
     alignItems: 'center',

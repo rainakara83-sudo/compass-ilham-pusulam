@@ -177,6 +177,65 @@
 - **React Native StyleSheet** — dark theme (#0f172a primary)
 - **Custom components** — chip, card, button, stat box
 
+---
+
+## 🎨 Design System
+
+Modüler, tema-duyarlı tipografi/renk/spacing altyapısı. Tüm dosyalar `styles/` altında.
+
+### Renk Paleti
+Pastel + canlı accent'ler (Hootsuite/Buffer/Spotify/Slack ilhamı). Light + dark varyantları.
+
+| Token | Light | Dark | Kullanım |
+|-------|-------|------|----------|
+| `primary` | `#4D96FF` | `#60A5FA` | Ana aksiyon, CTA, aktif sekme |
+| `primarySoft` | `#DCE9FF` | `#1E3A66` | Vurgu arka planı, chip/ghost pressed |
+| `secondary` | `#B79DFF` | `#C4B5FD` | İkincil vurgu (mor pastel) |
+| `accent` | `#FF6FA1` | `#FF8FB6` | Eğlenceli, samimi vurgu (pembe) |
+| `bg` / `surface` / `card` | farklı açıklık | koyu tonlar | Sayfa yüzeyi / kart yüzeyi |
+| `text` / `textMuted` | `#0F172A` / `#6B7280` | `#F1F5F9` / `#94A3B8` | Metin hiyerarşisi |
+
+Semantic tonlar (`success`, `warning`, `error`, `info`) her biri `bg`, `text`, `border`, `solid`, `solidText` alanlarıyla gelir. Nötr skala `neutralScale` (50–900) ayrıca export edilir.
+
+### Typography
+Display, h1, h2, h3, body, bodySm, caption, label — fontSize + lineHeight + fontWeight + letterSpacing. Platform-bağımsız, sistem font yığını.
+
+### Spacing
+4–64 px arası: `xs(4) · sm(8) · md(12) · lg(16) · xl(20) · 2xl(24) · 3xl(32) · 4xl(48) · 5xl(64)`.
+
+### Border Radius
+`sm(6) · md(10) · lg(16) · xl(24) · 2xl(32) · full(9999)`.
+
+### Shadows
+`sm / md / lg / xl` — `Platform.select` ile iOS shadow + Android elevation + Web boxShadow aynı objede birleşik.
+
+### Bileşen Stilleri
+- **Button** — `primary | secondary | ghost | icon`, her biri `default + pressed`, boyutlar `sm | md | lg`.
+- **Badge** — `solid | outline`, tonlar `neutral | primary | success | warning | error | info`.
+- **Chip** — `default | selected` (seçilebilir etiket).
+- **Tag** — kompakt, köşeli etiket.
+- **Input** — `default | focused | error | disabled` (container + text + placeholder).
+- **Card** — `flat | elevated | outlined`.
+- **Modal** — `backdrop | sheet`.
+
+### Tema Kompozisyonu
+`createTheme(scheme)` tüm token'ları tek `CompassTheme` objesinde toplar. Hazır: `lightTheme`, `darkTheme`. Mevcut `services/theme.tsx` (React context) bağımsız çalışır — context köprüsü ileride eklenecek.
+
+### Dosya Haritası
+```
+styles/
+├── colors.ts        # lightColors, darkColors, neutralScale
+├── typography.ts    # typography + tipleri
+├── spacing.ts       # spacing
+├── radius.ts        # radius
+├── shadows.ts       # shadows (platform-aware)
+├── buttons.ts       # createButtonStyles + buttonSizes
+├── badges.ts        # createBadgeStyles (badge + chip + tag)
+├── inputs.ts        # createInputStyles (input + card + modal)
+├── theme.ts         # createTheme, lightTheme, darkTheme
+└── index.ts         # barrel export
+```
+
 ### Build & Deploy
 - **EAS Update** — OTA (over-the-air) güncellemeler (`production` branch)
 - **EAS Build** — gerçek IPA/APK (opsiyonel, $99 Apple hesabı gerekir)
@@ -349,6 +408,12 @@ compass-ilham-pusulam/
 ├── package.json                  # Bağımlılıklar
 └── tsconfig.json                 # TypeScript config
 ```
+
+---
+
+## 🗺️ Roadmap (İleride)
+
+> **Gelecek:** Multi-niche desteği (fiyat: Pro planlar)
 
 ---
 

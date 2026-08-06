@@ -3,7 +3,7 @@
     "name": "Compass",
     "slug": "content-coach",
     "version": "1.0.0",
-    "description": "Compass - İlham Pusulam: Your content coach for ideas, planning, and growth.",
+    "description": "Compass — İlham Pusulam: Your compass for content ideas, planning, and growth.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",

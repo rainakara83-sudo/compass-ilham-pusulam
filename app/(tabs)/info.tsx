@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -9,17 +10,22 @@ import {
   View,
 } from 'react-native';
 import Constants from 'expo-constants';
+import PlanBadge from '../../components/PlanBadge';
 
 type FaqItem = { q: string; a: string };
 
 const FAQS: FaqItem[] = [
   {
     q: 'Fikirler nereden geliyor?',
-    a: 'İki kaynaktan: 1) 8 niş için önceden hazırlanmış 240+ fikir havuzu, 2) Yapay zeka modu ile nişine özel anlık üretim.',
+    a: 'İki kaynaktan: 1) 9 niş için önceden hazırlanmış 270+ fikir havuzu, 2) Yapay zeka modu ile nişine özel anlık üretim.',
   },
   {
     q: 'Yapay zekaya API anahtarı vermem mi gerek?',
     a: 'İstemezsen gerek yok. Sadece havuz modunu kullanabilirsin. İstersen backend-example klasöründeki örnek proxy kendi anahtarınla çalışır.',
+  },
+  {
+    q: 'İnternetsiz çalışır mı?',
+    a: 'Evet, uygulamayı ilk kez açtığında tüm içerikler cihazına kaydedilir (AsyncStorage). Bu sayede:\n• Fikir üretme ✓\n• Streak takibi ✓\n• İçerik bankası ✓\n• Planlama & takvim ✓\n• Tüm kayıtlı nişler ✓\n\nSadece şu özellikler internet gerektirir:\n• AI destekli fikir üretimi (cloud API)\n• Q&A Asistanı (yakında)\n• Yeni niş ekleme\n\nİnternet olmadığında uygulama normal çalışır, sadece AI özellikleri "akıllı havuz" (offline kayıtlı fikirler) ile devreye girer. İnternet geldiğinde otomatik senkronize olur.',
   },
   {
     q: 'Bildirimler çalışmıyor?',
@@ -31,7 +37,7 @@ const FAQS: FaqItem[] = [
   },
   {
     q: 'Yeni niş ekleyebilir miyim?',
-    a: 'Şimdilik 8 niş destekleniyor. data/content-pool.json dosyasına yeni fikirler ekleyebilirsin.',
+    a: 'Şimdilik 9 niş destekleniyor. data/content-pool.json dosyasına yeni fikirler ekleyebilirsin.',
   },
   {
     q: 'Streak nasıl çalışıyor?',
@@ -43,9 +49,20 @@ const APP_VERSION = (Constants.expoConfig?.version as string) ?? '1.0.0';
 
 export default function InfoScreen() {
   const [open, setOpen] = useState<number | null>(0);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   const onFeedback = async () => {
+    const url = 'mailto:hello@contentcoach.app?subject=Compass%20Geri%20Bildirim&body=Merhaba%20Compass%20ekibi%2C%0A%0A';
     try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+        return;
+      }
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = url;
+        return;
+      }
       await Share.share({
         message: 'Compass — İlham Pusulam geri bildirim: ',
         title: 'Geri bildirim',
@@ -54,14 +71,22 @@ export default function InfoScreen() {
   };
 
   const onMail = () => {
-    Linking.openURL('mailto:hello@contentcoach.app?subject=Content%20Coach%20Feedback');
+    const url = 'mailto:hello@contentcoach.app?subject=Content%20Coach%20Feedback';
+    Linking.openURL(url).catch(() => {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = url;
+      }
+    });
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Bilgi & Destek</Text>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.title}>Bilgi & Destek</Text>
+            <PlanBadge size="sm" refreshKey={planRefresh} />
+          </View>
           <Text style={styles.subtitle}>SSS, sürüm ve iletişim</Text>
         </View>
       </View>
@@ -114,7 +139,7 @@ export default function InfoScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 50, marginBottom: 16 },
   title: { fontSize: 24, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },

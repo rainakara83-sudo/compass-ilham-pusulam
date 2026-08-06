@@ -144,8 +144,25 @@ export default function DailyCardScreen() {
     outputRange: [0, 0, 1],
   });
 
+  const nicheEntry = (niches as { id: string; color: string }[]).find((n) => n.id === card.niche);
+  const nicheColor = nicheEntry?.color ?? '#7c5cff';
+  const hexToRgb = (h: string) => {
+    const c = h.replace('#', '');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
+  };
+  const [nr, ng, nb] = hexToRgb(nicheColor);
+  const lightBg = `rgb(${Math.round(nr + (255 - nr) * 0.85)}, ${Math.round(ng + (255 - ng) * 0.85)}, ${Math.round(nb + (255 - nb) * 0.85)})`;
+  const midBg = `rgb(${Math.round(nr + (255 - nr) * 0.7)}, ${Math.round(ng + (255 - ng) * 0.7)}, ${Math.round(nb + (255 - nb) * 0.7)})`;
+  const darkText = `rgb(${Math.round(nr * 0.35)}, ${Math.round(ng * 0.35)}, ${Math.round(nb * 0.35)})`;
+  const frontBg = midBg;
+  const backBg = darkText;
+  const frontText = darkText;
+  const backText = '#FFFFFF';
+  const frontBadge = darkText;
+  const backBadge = lightBg;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 10, backgroundColor: lightBg }]}>
       <Stack.Screen options={{ presentation: 'modal', headerShown: false }} />
 
       <View style={styles.headerRow}>
@@ -177,12 +194,12 @@ export default function DailyCardScreen() {
             { transform: [{ rotateY: frontRotate }], opacity: frontOpacity },
           ]}
         >
-          <View style={[styles.faceInner, { borderColor: tierMeta.glow }]}>
-            <Text style={styles.faceBadge}>{isPrompt ? '💡 GÜNLÜK SORU' : '✨ GÜNÜN İLHAMI'}</Text>
-            <Text style={styles.faceText} numberOfLines={isPrompt ? 5 : 6}>
+          <View style={[styles.faceInner, { backgroundColor: frontBg, borderColor: nicheColor }]}>
+            <Text style={[styles.faceBadge, { color: frontBadge }]}>{isPrompt ? '💡 GÜNLÜK SORU' : '✨ GÜNÜN İLHAMI'}</Text>
+            <Text style={[styles.faceText, { color: frontText }]} numberOfLines={isPrompt ? 5 : 6}>
               {card.idea}
             </Text>
-            <Text style={styles.faceTapHint}>Çevirmek için karta dokun ↻</Text>
+            <Text style={[styles.faceTapHint, { color: frontText, opacity: 0.6 }]}>Çevirmek için karta dokun ↻</Text>
           </View>
         </Animated.View>
 
@@ -193,10 +210,10 @@ export default function DailyCardScreen() {
             { transform: [{ rotateY: backRotate }], opacity: backOpacity },
           ]}
         >
-          <View style={[styles.faceInner, styles.faceInnerBack, { borderColor: tierMeta.glow }]}>
-            <Text style={styles.faceBadgeBack}>🎯 NEDEN BU?</Text>
+          <View style={[styles.faceInner, { backgroundColor: backBg, borderColor: lightBg }]}>
+            <Text style={[styles.faceBadgeBack, { color: backBadge }]}>🎯 NEDEN BU?</Text>
             {card.niche ? (
-              <Text style={styles.faceTextBack}>
+              <Text style={[styles.faceTextBack, { color: backText }]}>
                 Bu fikir senin <Text style={{ fontWeight: '800' }}>{card.niche}</Text> nişinden geldi.
                 {'\n\n'}Kısa bir ipucu:
                 {'\n'}• İlk 3 saniyede dikkat çekici bir açı dene
@@ -204,12 +221,12 @@ export default function DailyCardScreen() {
                 {'\n'}• Takipçilerine soru sor — yorum alsın
               </Text>
             ) : (
-              <Text style={styles.faceTextBack}>
+              <Text style={[styles.faceTextBack, { color: backText }]}>
                 Henüz bir niş seçmedin. Bu yüzden sana bir günlük ilham sorusu gösteriyoruz.
                 {'\n\n'}İpucu: Bir niş seç, bu kart o nişin havuzundan öneriler getirsin.
               </Text>
             )}
-            <Text style={styles.faceTapHint}>↩ Geri çevirmek için dokun</Text>
+            <Text style={[styles.faceTapHint, { color: backText, opacity: 0.7 }]}>↩ Geri çevirmek için dokun</Text>
           </View>
         </Animated.View>
 
@@ -217,18 +234,18 @@ export default function DailyCardScreen() {
       </View>
 
       <View style={styles.actions}>
-        <Pressable onPress={onCopy} style={[styles.actionBtn, styles.actionBtnCopy]}>
+        <Pressable onPress={onCopy} style={[styles.actionBtn, { backgroundColor: nicheColor }]}>
           <Text style={styles.actionBtnTxt}>{copied ? '✓ Kopyalandı' : '⧉ Kopyala'}</Text>
         </Pressable>
-        <Pressable onPress={onReroll} style={[styles.actionBtn, styles.actionBtnReroll]}>
+        <Pressable onPress={onReroll} style={[styles.actionBtn, { backgroundColor: darkText }]}>
           <Text style={styles.actionBtnTxt}>🎲 Yenisi</Text>
         </Pressable>
         <Pressable
           onPress={onOpenDetail}
           disabled={isPrompt}
-          style={[styles.actionBtn, styles.actionBtnDetail, isPrompt && styles.actionBtnDisabled]}
+          style={[styles.actionBtn, { backgroundColor: midBg, opacity: isPrompt ? 0.4 : 1 }]}
         >
-          <Text style={styles.actionBtnTxt}>Detay ›</Text>
+          <Text style={[styles.actionBtnTxt, { color: darkText }]}>Detay ›</Text>
         </Pressable>
       </View>
 

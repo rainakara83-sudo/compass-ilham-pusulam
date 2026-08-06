@@ -1,8 +1,15 @@
 import { WeeklyIdea, NicheId, pickWeeklyIdeasFromPool, pickRandomFromPool, isWeekend, getNichePool } from './contentService';
 
-const PROXY_URL =
-  (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_AI_PROXY_URL) ||
-  'https://YOUR_BACKEND_URL.com/api/ask';
+const RAW_PROXY_URL =
+  (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_AI_PROXY_URL) || '';
+
+const FALLBACK_PROXY_URL = 'https://compassv4fixed3.vercel.app/api/ask';
+
+const PROXY_URL = RAW_PROXY_URL && !RAW_PROXY_URL.includes('YOUR_BACKEND_URL')
+  ? RAW_PROXY_URL
+  : FALLBACK_PROXY_URL;
+
+export const isAIBackendConfigured = (): boolean => PROXY_URL.length > 0;
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -43,6 +50,12 @@ export type AskResult = {
 };
 
 export const askAI = async ({ niche, question, history = [] }: AskParams): Promise<AskResult> => {
+  if (!PROXY_URL) {
+    return {
+      answer:
+        'AI bağlantısı yapılandırılmamış. Lütfen .env dosyasına geçerli bir EXPO_PUBLIC_AI_PROXY_URL ekleyin ve uygulamayı yeniden başlatın.',
+    };
+  }
   if (!withinRateLimit()) {
     return { answer: 'Çok sık istek gönderiyorsun. Lütfen 1 dakika sonra tekrar dene.' };
   }
@@ -58,7 +71,7 @@ export const askAI = async ({ niche, question, history = [] }: AskParams): Promi
     );
 
     if (!res.ok) {
-      return { answer: 'Şu an cevap veremiyorum, lütfen tekrar dene.' };
+      return { answer: `Şu an cevap veremiyorum (HTTP ${res.status}). Lütfen tekrar dene.` };
     }
 
     const data = await res.json();
@@ -68,7 +81,9 @@ export const askAI = async ({ niche, question, history = [] }: AskParams): Promi
       return { answer: 'İstek zaman aşımına uğradı. Backend yanıt vermiyor olabilir.' };
     }
     console.warn('askAI error', e);
-    return { answer: 'Bağlantı hatası. Lütfen tekrar dene.' };
+    return {
+      answer: `Bağlantı hatası: ${e?.message ?? 'bilinmeyen hata'}. Backend URL'sini kontrol edin.`,
+    };
   }
 };
 
@@ -110,6 +125,7 @@ const WEEKLY_PROMPTS: PromptVariant[] = [
 ];
 
 const tryOnePrompt = async (variant: PromptVariant, niche: NicheId): Promise<string[] | null> => {
+  if (!PROXY_URL) return null;
   if (!withinRateLimit()) return null;
   try {
     const res = await fetchWithTimeout(
@@ -267,6 +283,7 @@ const VARIANT_PROMPTS: PromptVariant[] = [
 ];
 
 const tryVariantPrompt = async (variant: PromptVariant, niche: NicheId, original: string): Promise<string[] | null> => {
+  if (!PROXY_URL) return null;
   if (!withinRateLimit()) return null;
   try {
     const res = await fetchWithTimeout(
@@ -361,6 +378,7 @@ const HASHTAG_PROMPTS: PromptVariant[] = [
 ];
 
 const tryHashtagPrompt = async (variant: PromptVariant, niche: NicheId, original: string): Promise<HashtagItem[] | null> => {
+  if (!PROXY_URL) return null;
   if (!withinRateLimit()) return null;
   try {
     const res = await fetchWithTimeout(

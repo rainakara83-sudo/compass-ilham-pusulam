@@ -1,50 +1,19 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createTheme, type CompassTheme } from '../styles';
+import { lightColors, darkColors, type Palette } from '../styles/colors';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-export type ThemeColors = {
-  bg: string;
-  surface: string;
-  text: string;
-  textMuted: string;
-  border: string;
-  primary: string;
-  primaryText: string;
-  card: string;
-  inputBg: string;
-};
-
-const lightColors: ThemeColors = {
-  bg: '#F9FAFB',
-  surface: 'white',
-  text: '#111827',
-  textMuted: '#6B7280',
-  border: '#E5E7EB',
-  primary: '#4D96FF',
-  primaryText: 'white',
-  card: 'white',
-  inputBg: '#F3F4F6',
-};
-
-const darkColors: ThemeColors = {
-  bg: '#0F172A',
-  surface: '#1E293B',
-  text: '#F1F5F9',
-  textMuted: '#94A3B8',
-  border: '#334155',
-  primary: '#60A5FA',
-  primaryText: '#0F172A',
-  card: '#1E293B',
-  inputBg: '#334155',
-};
+export type ThemeColors = Palette;
 
 const THEME_KEY = '@content-coach/theme';
 
 type Ctx = {
   mode: ThemeMode;
   setMode: (m: ThemeMode) => Promise<void>;
+  theme: CompassTheme;
   colors: ThemeColors;
   isDark: boolean;
 };
@@ -69,10 +38,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const isDark =
     mode === 'dark' || (mode === 'system' && system === 'dark');
 
+  const theme = useMemo<CompassTheme>(() => createTheme(isDark ? 'dark' : 'light'), [isDark]);
   const colors = isDark ? darkColors : lightColors;
 
   return (
-    <ThemeContext.Provider value={{ mode, setMode, colors, isDark }}>
+    <ThemeContext.Provider value={{ mode, setMode, theme, colors, isDark }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -83,3 +53,5 @@ export const useTheme = (): Ctx => {
   if (!ctx) throw new Error('useTheme must be used inside ThemeProvider');
   return ctx;
 };
+
+export { lightColors, darkColors } from '../styles/colors';

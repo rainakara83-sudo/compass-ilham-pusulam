@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NicheId, getNichePool } from './contentService';
 
 const NICHE_KEY = '@content-coach/niche';
+const NICHES_KEY = '@content-coach/niches';
+const ACTIVE_NICHE_KEY = '@content-coach/active-niche';
 const FAVORITES_KEY = '@content-coach/favorites';
 const HISTORY_KEY = '@content-coach/history';
 const EXPERIENCE_KEY = '@content-coach/experience';
@@ -513,8 +515,14 @@ export type ContentGoal = 'growth' | 'engagement' | 'monetize' | 'community';
 
 export const getStoredNiche = async (): Promise<NicheId | null> => {
   try {
-    const v = await AsyncStorage.getItem(NICHE_KEY);
-    return v as NicheId | null;
+    const list = await getStoredNiches();
+    if (list.length > 0) {
+      const active = await getActiveNiche();
+      if (active && list.includes(active)) return active;
+      return list[0];
+    }
+    const legacy = await AsyncStorage.getItem(NICHE_KEY);
+    return legacy as NicheId | null;
   } catch {
     return null;
   }
@@ -522,10 +530,208 @@ export const getStoredNiche = async (): Promise<NicheId | null> => {
 
 export const setStoredNiche = async (niche: NicheId): Promise<void> => {
   await AsyncStorage.setItem(NICHE_KEY, niche);
+  const list = await getStoredNiches();
+  if (!list.includes(niche)) {
+    list.push(niche);
+    await AsyncStorage.setItem(NICHES_KEY, JSON.stringify(list));
+  }
+  await AsyncStorage.setItem(ACTIVE_NICHE_KEY, niche);
 };
 
 export const clearStoredNiche = async (): Promise<void> => {
   await AsyncStorage.removeItem(NICHE_KEY);
+  await AsyncStorage.removeItem(NICHES_KEY);
+  await AsyncStorage.removeItem(ACTIVE_NICHE_KEY);
+};
+
+export const getStoredNiches = async (): Promise<NicheId[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(NICHES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((n): n is NicheId => typeof n === 'string');
+      }
+    }
+    const legacy = await AsyncStorage.getItem(NICHE_KEY);
+    if (legacy) {
+      await AsyncStorage.setItem(NICHES_KEY, JSON.stringify([legacy]));
+      return [legacy as NicheId];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+};
+
+export const setStoredNiches = async (niches: NicheId[]): Promise<void> => {
+  const unique = Array.from(new Set(niches));
+  await AsyncStorage.setItem(NICHES_KEY, JSON.stringify(unique));
+  const active = await getActiveNiche();
+  if (!active || !unique.includes(active)) {
+    await AsyncStorage.setItem(ACTIVE_NICHE_KEY, unique[0] ?? '');
+  }
+};
+
+export const addStoredNiche = async (niche: NicheId): Promise<NicheId[]> => {
+  const list = await getStoredNiches();
+  if (!list.includes(niche)) {
+    list.push(niche);
+    await AsyncStorage.setItem(NICHES_KEY, JSON.stringify(list));
+  }
+  if (list.length === 1) {
+    await AsyncStorage.setItem(ACTIVE_NICHE_KEY, niche);
+  }
+  return list;
+};
+
+export const removeStoredNiche = async (niche: NicheId): Promise<NicheId[]> => {
+  const list = (await getStoredNiches()).filter((n) => n !== niche);
+  await AsyncStorage.setItem(NICHES_KEY, JSON.stringify(list));
+  const active = await getActiveNiche();
+  if (active === niche) {
+    await AsyncStorage.setItem(ACTIVE_NICHE_KEY, list[0] ?? '');
+  }
+  return list;
+};
+
+export const getActiveNiche = async (): Promise<NicheId | null> => {
+  try {
+    const v = await AsyncStorage.getItem(ACTIVE_NICHE_KEY);
+    return v ? (v as NicheId) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const setActiveNiche = async (niche: NicheId): Promise<void> => {
+  const list = await getStoredNiches();
+  if (!list.includes(niche)) {
+    list.push(niche);
+    await AsyncStorage.setItem(NICHES_KEY, JSON.stringify(list));
+  }
+  await AsyncStorage.setItem(ACTIVE_NICHE_KEY, niche);
+};
+
+// ============================================================================
+// ROUND 63 — Paywall & Plan state
+// ============================================================================
+
+export type UserPlan = 'free' | 'pro_monthly' | 'pro_yearly';
+
+const PLAN_KEY = '@content-coach/plan';
+const MONTHLY_COUNT_KEY = '@content-coach/monthly-count';
+const MONTHLY_MONTH_KEY = '@content-coach/monthly-month';
+const PURCHASED_NICHES_KEY = '@content-coach/purchased-niches';
+const PLAN_START_KEY = '@content-coach/plan-start';
+
+export const FREE_NICHE_LIMIT = 3;
+export const FREE_IDEA_LIMIT = 20;
+
+export const getUserPlan = async (): Promise<UserPlan> => {
+  try {
+    const v = await AsyncStorage.getItem(PLAN_KEY);
+    if (v === 'pro_monthly' || v === 'pro_yearly') return v;
+    return 'free';
+  } catch {
+    return 'free';
+  }
+};
+
+export const setUserPlan = async (plan: UserPlan): Promise<void> => {
+  await AsyncStorage.setItem(PLAN_KEY, plan);
+  await AsyncStorage.setItem(PLAN_START_KEY, String(Date.now()));
+};
+
+export const clearUserPlan = async (): Promise<void> => {
+  await AsyncStorage.removeItem(PLAN_KEY);
+  await AsyncStorage.removeItem(PLAN_START_KEY);
+};
+
+export const getPlanStartedAt = async (): Promise<number | null> => {
+  try {
+    const v = await AsyncStorage.getItem(PLAN_START_KEY);
+    return v ? Number(v) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getPurchasedNiches = async (): Promise<NicheId[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(PURCHASED_NICHES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((n): n is NicheId => typeof n === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+export const addPurchasedNiche = async (niche: NicheId): Promise<void> => {
+  const list = await getPurchasedNiches();
+  if (list.includes(niche)) return;
+  list.push(niche);
+  await AsyncStorage.setItem(PURCHASED_NICHES_KEY, JSON.stringify(list));
+};
+
+const currentMonthKey = (): string => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+export type MonthlyUsage = { month: string; count: number; limit: number; isPro: boolean };
+
+export const getMonthlyUsage = async (): Promise<MonthlyUsage> => {
+  const plan = await getUserPlan();
+  const isPro = plan !== 'free';
+  if (isPro) {
+    return { month: currentMonthKey(), count: 0, limit: Infinity, isPro: true };
+  }
+  const month = currentMonthKey();
+  try {
+    const storedMonth = await AsyncStorage.getItem(MONTHLY_MONTH_KEY);
+    if (storedMonth !== month) {
+      await AsyncStorage.setItem(MONTHLY_MONTH_KEY, month);
+      await AsyncStorage.setItem(MONTHLY_COUNT_KEY, '0');
+      return { month, count: 0, limit: FREE_IDEA_LIMIT, isPro: false };
+    }
+    const raw = await AsyncStorage.getItem(MONTHLY_COUNT_KEY);
+    const count = raw ? Math.max(0, parseInt(raw, 10) || 0) : 0;
+    return { month, count, limit: FREE_IDEA_LIMIT, isPro: false };
+  } catch {
+    return { month, count: 0, limit: FREE_IDEA_LIMIT, isPro: false };
+  }
+};
+
+export const incrementMonthlyUsage = async (n: number = 1): Promise<MonthlyUsage> => {
+  const plan = await getUserPlan();
+  if (plan !== 'free') {
+    return { month: currentMonthKey(), count: 0, limit: Infinity, isPro: true };
+  }
+  const month = currentMonthKey();
+  try {
+    const storedMonth = await AsyncStorage.getItem(MONTHLY_MONTH_KEY);
+    let count: number;
+    if (storedMonth !== month) {
+      await AsyncStorage.setItem(MONTHLY_MONTH_KEY, month);
+      count = 0;
+    } else {
+      const raw = await AsyncStorage.getItem(MONTHLY_COUNT_KEY);
+      count = raw ? Math.max(0, parseInt(raw, 10) || 0) : 0;
+    }
+    count = count + n;
+    await AsyncStorage.setItem(MONTHLY_COUNT_KEY, String(count));
+    return { month, count, limit: FREE_IDEA_LIMIT, isPro: false };
+  } catch {
+    return { month, count: n, limit: FREE_IDEA_LIMIT, isPro: false };
+  }
+};
+
+export const isIdeaAllowed = async (): Promise<{ allowed: boolean; usage: MonthlyUsage }> => {
+  const usage = await getMonthlyUsage();
+  if (usage.isPro) return { allowed: true, usage };
+  return { allowed: usage.count < usage.limit, usage };
 };
 
 export const getFavorites = async (): Promise<string[]> => {
@@ -1945,11 +2151,12 @@ export const getDailyCard = async (niche: NicheId | null): Promise<DailyCardEntr
     const raw = await AsyncStorage.getItem(DAILY_CARD_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.date === today && typeof parsed.idea === 'string') {
+      const cachedNiche: NicheId | null = typeof parsed.niche === 'string' ? (parsed.niche as NicheId) : null;
+      if (parsed && parsed.date === today && typeof parsed.idea === 'string' && cachedNiche === niche) {
         return {
           date: today,
           idea: parsed.idea,
-          niche: typeof parsed.niche === 'string' ? (parsed.niche as NicheId) : null,
+          niche: cachedNiche,
         };
       }
     }

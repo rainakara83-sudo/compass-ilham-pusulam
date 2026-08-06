@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Content Coach",
+    "appName": "Compass — İlham Pusulam",
     "loading": "Yükleniyor...",
     "save": "Kaydet",
     "cancel": "İptal",
@@ -33,12 +33,23 @@
     "weeklySubtitle": "{{count}} yeni fikir senin için hazır",
     "noIdeas": "Şu an görüntülenecek fikir yok. Lütfen ayarlardan niş seç.",
     "aiRefreshing": "Yeni fikirler üretiliyor...",
-    "aiButton": "Yapay zeka ile yenile",
+    "aiButton": "Akıllı Yenile",
     "poolButton": "Havuzdan yenile",
     "monday": "Pazartesi",
     "wednesday": "Çarşamba",
     "friday": "Cuma",
-    "saturday": "Cumartesi"
+    "saturday": "Cumartesi",
+    "nowBadge": "📍 ŞU AN",
+    "bestTimeBadge": "⏰ PAYLAŞIM SAATİ",
+    "nowLabel": "Şu an",
+    "bestTimeLabel": "En iyi saat",
+    "goldHourIn": "Altın saate",
+    "addToCalendar": "Takvime Ekle",
+    "morningSlot": "Sabah",
+    "noonSlot": "Öğle",
+    "eveningSlot": "Akşam",
+    "nightSlot": "Gece",
+    "onAir": "Canlı"
   },
   "reminders": {
     "title": "Hatırlatmalar",
@@ -74,6 +85,93 @@
     "travel": "Seyahat",
     "gaming": "Oyun",
     "personal_dev": "Kişisel Gelişim",
-    "beauty": "Güzellik"
+    "beauty": "Güzellik",
+    "astrology": "Astroloji"
+  },
+  "pricing": {
+    "heroTitle": "Compass'ın tam gücünü aç",
+    "heroSubtitle": "Fikir üretimini sınırsızlaştır, AI özelliklerini aç, tüm nişlere ulaş.",
+    "currentPlan": "MEVCUT PLAN",
+    "free": "Free",
+    "proMonthly": "Pro Monthly",
+    "proYearly": "Pro Yearly",
+    "freeBadge": "FREE",
+    "proBadge": "PRO",
+    "yearlyBadge": "⭐ YILLIK",
+    "current": "✓ Mevcut Planın",
+    "upgrade": "Şimdi Yükselt",
+    "popular": "⭐ EN POPÜLER",
+    "saveBadge": "🎁 2 ay bedava",
+    "perMonth": "ay",
+    "perYear": "yıl",
+    "compareTitle": "Karşılaştırma",
+    "faqTitle": "Sıkça sorulan sorular",
+    "footer": "🔒 Güvenli ödeme · İstediğin zaman iptal · 7/24 destek",
+    "monthlyUsage": "Bu ay {count}/{limit} fikir kullanıldı",
+    "startedOn": "Başlangıç: {date}",
+    "confirmTitle": "Ödemeyi onayla",
+    "confirmSub": "{plan} planın aktif edildi",
+    "confirmNote": "Bu demo bir ödeme akışıdır. Hiçbir ücret alınmaz.",
+    "processing": "Ödeme işleniyor...",
+    "waitPlease": "Lütfen bekleyin",
+    "cancel": "Vazgeç",
+    "approve": "Onayla ve Yükselt",
+    "successTitle": "Pro'ya hoş geldin!",
+    "successSub": "{plan} planın aktif edildi. Sınırsız fikir, tüm nişler ve AI özelliklerin açık.",
+    "letsGo": "Hadi Başlayalım",
+    "paywallIdeaTitle": "Bu ay 20 fikir limitine ulaştın",
+    "paywallIdeaSub": "Bu ay {count}/{limit} fikir kullandın. Pro ile sınırsız fikir üret, AI özelliklerini aç.",
+    "paywallNicheTitle": "Tüm 9 niş Pro ile açılır",
+    "paywallNicheSub": "Free planda en fazla 3 niş seçebilirsin. Pro ile tüm 9 nişe eriş, ayda sınırsız fikir üret.",
+    "later": "Daha Sonra",
+    "goPro": "Pro'ya Geç ›",
+    "featureUnlimitedIdeas": "Sınırsız fikir",
+    "featureAllNiches": "Tüm 9 niş",
+    "featureAI": "AI özellikler açık",
+    "featureNoAds": "Reklamsız",
+    "freeFeatures": [
+      "Ayda 20 fikir",
+      "En fazla 3 niş seçilebilir",
+      "Temel streak takibi",
+      "Havuzdan fikir üretimi"
+    ],
+    "proMonthlyFeatures": [
+      "Sınırsız fikir üretimi",
+      "Tüm 9 nişe erişim",
+      "AI özellikler (Q&A, AI fikir, gelişmiş)",
+      "Gelişmiş analytics & insights",
+      "Custom prompt kütüphanesi",
+      "Reklamsız deneyim"
+    ],
+    "proYearlyFeatures": [
+      "Pro Monthly'nin tüm özellikleri",
+      "Yıllık ödeme ile %43 indirim",
+      "Öncelikli yeni özellikler",
+      "Özel Pro rozeti (header'da)",
+      "Sınırsız fikir, tüm nişler",
+      "Reklamsız + premium destek"
+    ],
+    "compareRows": [
+      ["Aylık fikir", "20", "∞", "∞"],
+      ["Niş sayısı", "3", "8", "8"],
+      ["AI özellikler", "—", "✓", "✓"],
+      ["Gelişmiş analytics", "—", "✓", "✓"],
+      ["Reklamsız", "—", "✓", "✓"],
+      ["Öncelikli destek", "—", "—", "✓"]
+    ],
+    "faqs": [
+      {
+        "q": "Planımı istediğim zaman iptal edebilir miyim?",
+        "a": "Evet. İstediğin zaman ayarlardan iptal edebilirsin, mevcut dönemin sonuna kadar Pro özellikler açık kalır."
+      },
+      {
+        "q": "Yıllık plandan aylığa geçebilir miyim?",
+        "a": "Evet. Yükseltme ya da geçiş istediğinde kalan süre orantılı olarak hesaplanır."
+      },
+      {
+        "q": "Ücretsiz deneme var mı?",
+        "a": "Ücretsiz Free plan tüm özelliklerin önizlemesini sunar. Pro'ya geçince ek bir deneme süresi yoktur."
+      }
+    ]
   }
 }

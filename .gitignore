@@ -4,6 +4,7 @@ node_modules/
 dist/
 web-build/
 eas-build/
+.npmcache/
 
 .env
 .env.local

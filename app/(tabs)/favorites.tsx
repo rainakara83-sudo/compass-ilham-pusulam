@@ -7,6 +7,7 @@ import {
   getFavoritesDetailed,
   removeManyFavorites,
 } from '../../services/storage';
+import PlanBadge from '../../components/PlanBadge';
 
 const formatDate = (ts: number) => {
   const d = new Date(ts);
@@ -21,6 +22,7 @@ export default function FavoritesScreen() {
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   const load = useCallback(async () => {
     setItems(await getFavoritesDetailed());
@@ -29,6 +31,7 @@ export default function FavoritesScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      setPlanRefresh((x) => x + 1);
     }, [load])
   );
 
@@ -116,7 +119,10 @@ export default function FavoritesScreen() {
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>⭐ Favoriler</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.title}>⭐ Favoriler</Text>
+            <PlanBadge size="sm" refreshKey={planRefresh} />
+          </View>
           <Text style={styles.subtitle}>{items.length} kayıtlı fikir</Text>
         </View>
         {items.length > 0 && (
@@ -217,7 +223,7 @@ export default function FavoritesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 50, marginBottom: 12 },
   title: { fontSize: 24, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },

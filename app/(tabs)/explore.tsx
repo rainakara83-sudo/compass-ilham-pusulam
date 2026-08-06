@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { getStoredNiche, getFavorites, toggleFavorite, addCopyToHistory } from '../../services/storage';
 import { NicheId, getNichePool, pickRandomFromPool, searchNichePool } from '../../services/contentService';
+import PlanBadge from '../../components/PlanBadge';
 
 export default function ExploreScreen() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ export default function ExploreScreen() {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [randomIdea, setRandomIdea] = useState<string | null>(null);
   const [randomCopied, setRandomCopied] = useState(false);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   useEffect(() => {
     if (deepQ !== undefined && deepQ !== query) setQuery(deepQ);
@@ -39,6 +41,7 @@ export default function ExploreScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      setPlanRefresh((x) => x + 1);
     }, [load])
   );
 
@@ -93,7 +96,10 @@ export default function ExploreScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>🔍 Keşfet</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={styles.title}>🔍 Keşfet</Text>
+          <PlanBadge size="sm" refreshKey={planRefresh} />
+        </View>
         <Text style={styles.subtitle}>
           {t(`niches.${niche}`, niche)} • {items.length} fikir
         </Text>
@@ -191,10 +197,10 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 12, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  title: { fontSize: 24, fontWeight: '800', color: '#111827' },
+  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 12, backgroundColor: '#FAFCF6', borderBottomWidth: 1, borderBottomColor: '#C5D2A0' },
+  title: { fontSize: 24, fontWeight: '800', color: '#2F3B25' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4, textTransform: 'capitalize' },
   searchRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
   search: {

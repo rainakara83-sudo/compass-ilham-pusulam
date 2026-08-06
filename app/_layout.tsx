@@ -52,7 +52,7 @@ export default function RootLayout() {
       const segArr: string[] = Array.isArray(segments) ? segments : [];
       const onWelcome = segArr.some(s => s === 'welcome');
       if (!niche && !inOnboarding) {
-        router.replace('/(onboarding)/language-select');
+        router.replace('/(onboarding)/intro');
       } else if (niche && inOnboarding && !onWelcome) {
         router.replace('/(tabs)');
       }

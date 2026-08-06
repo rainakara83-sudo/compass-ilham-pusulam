@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Content Coach",
+    "appName": "Compass — Compass",
     "loading": "Loading...",
     "save": "Save",
     "cancel": "Cancel",
@@ -33,12 +33,23 @@
     "weeklySubtitle": "{{count}} fresh ideas for you",
     "noIdeas": "No ideas to show. Please pick a niche from settings.",
     "aiRefreshing": "Generating new ideas...",
-    "aiButton": "Refresh with AI",
+    "aiButton": "Smart Refresh",
     "poolButton": "Refresh from pool",
     "monday": "Monday",
     "wednesday": "Wednesday",
     "friday": "Friday",
-    "saturday": "Saturday"
+    "saturday": "Saturday",
+    "nowBadge": "📍 NOW",
+    "bestTimeBadge": "⏰ BEST TIME",
+    "nowLabel": "Now",
+    "bestTimeLabel": "Best time",
+    "goldHourIn": "To golden hour",
+    "addToCalendar": "Add to Calendar",
+    "morningSlot": "Morning",
+    "noonSlot": "Noon",
+    "eveningSlot": "Evening",
+    "nightSlot": "Night",
+    "onAir": "Live"
   },
   "reminders": {
     "title": "Reminders",
@@ -74,6 +85,84 @@
     "travel": "Travel",
     "gaming": "Gaming",
     "personal_dev": "Personal Development",
-    "beauty": "Beauty"
+    "beauty": "Beauty",
+    "astrology": "Astrology"
+  },
+  "pricing": {
+    "heroTitle": "Unlock Compass' full power",
+    "heroSubtitle": "Unlimited ideas, AI features, all niches.",
+    "currentPlan": "CURRENT PLAN",
+    "free": "Free",
+    "proMonthly": "Pro Monthly",
+    "proYearly": "Pro Yearly",
+    "freeBadge": "FREE",
+    "proBadge": "PRO",
+    "yearlyBadge": "⭐ YEARLY",
+    "current": "✓ Your current plan",
+    "upgrade": "Upgrade now",
+    "popular": "⭐ MOST POPULAR",
+    "saveBadge": "🎁 2 months free",
+    "perMonth": "month",
+    "perYear": "year",
+    "compareTitle": "Compare",
+    "faqTitle": "Frequently asked questions",
+    "footer": "🔒 Secure payment · Cancel anytime · 24/7 support",
+    "monthlyUsage": "This month {count}/{limit} ideas used",
+    "startedOn": "Started: {date}",
+    "confirmTitle": "Confirm payment",
+    "confirmSub": "{plan} plan activated",
+    "confirmNote": "This is a demo payment flow. No charge is made.",
+    "processing": "Processing payment...",
+    "waitPlease": "Please wait",
+    "cancel": "Cancel",
+    "approve": "Confirm & Upgrade",
+    "successTitle": "Welcome to Pro!",
+    "successSub": "{plan} plan is active. Unlimited ideas, all niches, AI features unlocked.",
+    "letsGo": "Let's go",
+    "paywallIdeaTitle": "You've hit the 20 ideas/month limit",
+    "paywallIdeaSub": "This month you've used {count}/{limit} ideas. Go Pro for unlimited ideas & AI features.",
+    "paywallNicheTitle": "All 9 niches unlock with Pro",
+    "paywallNicheSub": "Free allows up to 3 niches. Pro unlocks all 9 niches and unlimited monthly ideas.",
+    "later": "Later",
+    "goPro": "Go Pro ›",
+    "featureUnlimitedIdeas": "Unlimited ideas",
+    "featureAllNiches": "All 9 niches",
+    "featureAI": "AI features unlocked",
+    "featureNoAds": "Ad-free",
+    "freeFeatures": [
+      "20 ideas / month",
+      "Up to 3 niches",
+      "Basic streak tracking",
+      "Pool-based idea generation"
+    ],
+    "proMonthlyFeatures": [
+      "Unlimited idea generation",
+      "Access to all 9 niches",
+      "AI features (Q&A, AI ideas, advanced)",
+      "Advanced analytics & insights",
+      "Custom prompt library",
+      "Ad-free experience"
+    ],
+    "proYearlyFeatures": [
+      "Everything in Pro Monthly",
+      "43% off with annual billing",
+      "Priority access to new features",
+      "Special Pro badge (in header)",
+      "Unlimited ideas, all niches",
+      "Ad-free + premium support"
+    ],
+    "compareRows": [
+      ["Monthly ideas", "20", "∞", "∞"],
+      ["Niches", "3", "8", "8"],
+      ["AI features", "—", "✓", "✓"],
+      ["Advanced analytics", "—", "✓", "✓"],
+      ["Ad-free", "—", "✓", "✓"],
+      ["Priority support", "—", "—", "✓"]
+    ],
+    "faqs": [
+      { "q": "Can I cancel anytime?", "a": "Yes. Cancel from settings anytime — Pro features remain until period ends." },
+      { "q": "Can I switch yearly to monthly?", "a": "Yes. Remaining time is prorated automatically." },
+      { "q": "Is there a free trial?", "a": "Free plan gives a preview of all features. No additional trial when going Pro." }
+    ]
   }
 }

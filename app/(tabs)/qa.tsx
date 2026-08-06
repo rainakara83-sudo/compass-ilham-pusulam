@@ -1,10 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Clipboard,
-  KeyboardAvoidingView,
-  Platform,
+  Animated,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,360 +9,253 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { askAI } from '../../services/aiService';
-import {
-  FavoritePrompt,
-  QACategory,
-  RecentQuestion,
-  addFavoritePrompt,
-  addRecentQuestion,
-  clearRecentQuestions,
-  getFavoritePrompts,
-  getRecentQuestions,
-  getStoredNiche,
-  isFavoritePrompt,
-  removeFavoritePrompt,
-} from '../../services/storage';
+import nichesData from '../../data/niches.json';
+import { getIdeaBank, Idea, getStoredNiche } from '../../services/storage';
 import { NicheId } from '../../services/contentService';
+import PlanBadge from '../../components/PlanBadge';
 
-type Msg = { id: string; role: 'user' | 'assistant'; content: string };
-
-const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-const CATEGORIES: { id: QACategory; label: string; icon: string }[] = [
-  { id: 'titles', label: 'Başlıklar', icon: '✍️' },
-  { id: 'ideas', label: 'Fikirler', icon: '💡' },
-  { id: 'caption', label: 'Caption', icon: '📝' },
-  { id: 'hashtag', label: 'Hashtag', icon: '#️⃣' },
-  { id: 'analytics', label: 'Analiz', icon: '📊' },
-  { id: 'other', label: 'Diğer', icon: '✨' },
+const QUOTES = [
+  'Bugün attığın adım, yarınki başarının temeli.',
+  'Tutarlılık, motivasyondan daha güçlüdür.',
+  'Küçük fikirler büyük topluluklar yaratır.',
+  'İlham gelmez — onu sen çağırırsın.',
+  'Paylaşmak için mükemmel olmak zorunda değilsin; gerçek olmak yeter.',
+  'Bir fikri 7 farklı açıdan anlat, her seferinde yeni bir kitle yakala.',
+  'İçeriğin değer ürettiği sürece, zaman seni ödüllendirir.',
+  'Vazgeçmek, hiç başlamamış olmaktan daha kötüdür.',
+  'Soru sormak, cevap vermekten daha güçlü bir hiledir.',
+  'Bugün 1 fikir, yarın 10 içeriğin hammaddesidir.',
+  'Senin nişin küçük olabilir; ama etkin büyük olabilir.',
+  'Topluluk, sık içerik üretenden değil, değer oluşturandan yanında durur.',
 ];
 
-const PROMPTS_BY_CAT: Record<QACategory, { icon: string; text: string }[]> = {
-  titles: [
-    { icon: '🔥', text: 'Bu hafta için 5 dikkat çekici başlık öner' },
-    { icon: '❓', text: 'Soru formatında 3 başlık yaz' },
-    { icon: '📋', text: 'Listeleme tarzında 5 başlık öner' },
-    { icon: '😱', text: 'Merak uyandıran 5 clickbait başlık öner' },
-  ],
-  ideas: [
-    { icon: '📅', text: '30 günlük içerik takvimi çıkar' },
-    { icon: '💡', text: 'Nişimde trend olan konular neler?' },
-    { icon: '🎯', text: 'Hedef kitlemle etkileşimi nasıl artırırım?' },
-    { icon: '🖼', text: 'Görsel fikirleri için ipuçları ver' },
-  ],
-  caption: [
-    { icon: '📝', text: 'Bu fikir için kısa bir caption yaz' },
-    { icon: '🎣', text: 'İlk cümlesi dikkat çeken bir açılış yaz' },
-    { icon: '💬', text: 'Yoruma teşvik eden bir caption öner' },
-    { icon: '🪄', text: 'Mevcut captionımı daha akıcı hale getir' },
-  ],
-  hashtag: [
-    { icon: '📊', text: 'Nişim için 20 hashtag öner' },
-    { icon: '🔥', text: 'Trend hashtag kombinasyonları sun' },
-    { icon: '🌍', text: 'Türkçe ve uluslararası hashtag karışımı öner' },
-  ],
-  analytics: [
-    { icon: '📈', text: 'Son gönderim neden az etkileşim aldı?' },
-    { icon: '⏰', text: 'En iyi paylaşım saatleri ne zaman?' },
-    { icon: '🧪', text: 'A/B test için hangi değişkenleri denemeliyim?' },
-  ],
-  other: [
-    { icon: '🤝', text: 'Nişimdeki diğer içerik üreticileriyle işbirliği nasıl yaparım?' },
-    { icon: '💼', text: 'Sponsorluk teklifi alırken nelere dikkat etmeliyim?' },
-  ],
+const NICHES = nichesData as { id: string; icon: string; color: string }[];
+
+const TIPS = [
+  { id: 'fitness', title: 'Hızlı Paylaşım', text: 'Antrenman sonu "ne yaptın?" sorusunu yanıtlayan 1 cümlelik post, en yüksek etkileşimi alır.', emoji: '⚡' },
+  { id: 'food', title: 'Görsel Önce', text: 'Tariflerde önce fotoğrafı, sonra malzemeleri ver. Açlık hissi tıklamayı tetikler.', emoji: '🍴' },
+  { id: 'tech', title: 'Kısa Karşılaştırma', text: '"X mi Y mi?" formatı yorum almayı 2x artırır. Tarafsız kal, izleyici karar versin.', emoji: '⚖️' },
+  { id: 'fashion', title: 'Önce-Sonra', text: 'Aynı kombini 3 farklı ışıkta göster; izleyici "hangisini ben de yapabilirim?" diye sorar.', emoji: '🪞' },
+  { id: 'travel', title: 'Pratik Bilgi', text: 'Gideceğin yerin "kaç para, kaç gün, ne yenir" özetini post olarak ver — rehber formatı tutar.', emoji: '🗺' },
+  { id: 'gaming', title: 'Highlight Önce', text: 'Videonun en heyecanlı 5 saniyesini ilk frame olarak kullan. İzleyici 5 saniye sonra kalır.', emoji: '🎮' },
+  { id: 'personal_dev', title: 'Hatırlanabilir Liste', text: '"3 kitap / 3 alışkanlık / 3 ders" üçlüsü, kitap özetlerinden 3x paylaşılır.', emoji: '📚' },
+  { id: 'beauty', title: 'Öncesiz Sonuç Olmaz', text: '5 saniyelik uygulama öncesi/sonrası, ürün incelemesinden 4x fazla kaydetme alır.', emoji: '✨' },
+];
+
+const hashSeed = (s: string): number => {
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
 };
 
-const detectCategory = (text: string): QACategory => {
-  const lower = text.toLowerCase();
-  if (/(başlık|title)/.test(lower)) return 'titles';
-  if ((/fikir|takvim|trend|konu/.test(lower))) return 'ideas';
-  if (/caption|açılış|yorum/.test(lower)) return 'caption';
-  if (/(hashtag|#)/.test(lower)) return 'hashtag';
-  if (/(analiz|saat|etkileşim|test)/.test(lower)) return 'analytics';
-  return 'other';
-};
-
-export default function QAScreen() {
+export default function InspirationBoardScreen() {
+  const router = useRouter();
   const { t } = useTranslation();
+  const [ideas, setIdeas] = useState<Idea[]>([]);
   const [niche, setNiche] = useState<NicheId | null>(null);
-  const [messages, setMessages] = useState<Msg[]>([]);
-  const [input, setInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [activeCat, setActiveCat] = useState<QACategory>('titles');
-  const [favPrompts, setFavPrompts] = useState<FavoritePrompt[]>([]);
-  const [recent, setRecent] = useState<RecentQuestion[]>([]);
-  const scrollRef = useRef<ScrollView | null>(null);
+  const [query, setQuery] = useState('');
+  const [planRefresh, setPlanRefresh] = useState(0);
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const quoteIdx = hashSeed(todayKey) % QUOTES.length;
+  const todayQuote = QUOTES[quoteIdx];
+
+  const fade = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
-    getStoredNiche().then((n) => setNiche(n));
-    setMessages([{ id: newId(), role: 'assistant', content: t('qa.welcome') }]);
-  }, [t]);
+    Animated.parallel([
+      Animated.timing(fade, { toValue: 1, duration: 480, useNativeDriver: true }),
+      Animated.spring(cardScale, { toValue: 1, friction: 6, useNativeDriver: true }),
+    ]).start();
+    (async () => {
+      const [bank, storedNiche] = await Promise.all([getIdeaBank(), getStoredNiche()]);
+      setIdeas(bank);
+      setNiche(storedNiche);
+    })();
+    setPlanRefresh((x) => x + 1);
+  }, [cardScale, fade]);
 
-  useFocusEffect(
-    useCallback(() => {
-      (async () => {
-        setFavPrompts(await getFavoritePrompts());
-        setRecent(await getRecentQuestions());
-      })();
-    }, [])
-  );
+  const nicheEntry = NICHES.find((n) => n.id === niche);
+  const nicheColor = nicheEntry?.color ?? '#2F3B25';
 
-  const refreshFav = async () => setFavPrompts(await getFavoritePrompts());
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ideas.slice(0, 12);
+    return ideas.filter((it) => {
+      const hay = `${it.title ?? ''} ${it.description ?? ''} ${it.tags?.join(' ') ?? ''} ${it.angle ?? ''}`.toLowerCase();
+      return hay.includes(q);
+    }).slice(0, 30);
+  }, [ideas, query]);
 
-  const send = async (overrideText?: string) => {
-    const text = (overrideText ?? input).trim();
-    if (!text || !niche) return;
-    const userMsg: Msg = { id: newId(), role: 'user', content: text };
-    setMessages((m) => [...m, userMsg]);
-    if (!overrideText) setInput('');
-    setBusy(true);
-    const result = await askAI({ niche, question: text, history: messages });
-    setMessages((m) => [...m, { id: newId(), role: 'assistant', content: result.answer || t('qa.error') }]);
-    setBusy(false);
-    setRecent(await addRecentQuestion(text));
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  const tipsForNiche = useMemo(() => {
+    if (!niche) return TIPS.slice(0, 4);
+    const own = TIPS.filter((t) => t.id === niche);
+    const others = TIPS.filter((t) => t.id !== niche).slice(0, 4 - own.length);
+    return [...own, ...others];
+  }, [niche]);
+
+  const hexToRgb = (h: string) => {
+    const c = h.replace('#', '');
+    return [parseInt(c.slice(0, 2), 16), parseInt(c.slice(2, 4), 16), parseInt(c.slice(4, 6), 16)];
   };
-
-  const regenerate = async (assistantId: string) => {
-    if (!niche) return;
-    let userText = '';
-    setMessages((prev) => {
-      const idx = prev.findIndex((m) => m.id === assistantId);
-      if (idx <= 0) return prev;
-      userText = prev[idx - 1].content;
-      return prev.slice(0, idx);
-    });
-    if (!userText) return;
-    setBusy(true);
-    const result = await askAI({ niche, question: userText, history: messages });
-    setMessages((m) => [...m, { id: newId(), role: 'assistant', content: result.answer || t('qa.error') }]);
-    setBusy(false);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-  };
-
-  const copy = (id: string, content: string) => {
-    Clipboard.setString(content);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
-
-  const clearChat = () => {
-    setMessages([{ id: newId(), role: 'assistant', content: t('qa.welcome') }]);
-  };
-
-  const toggleFavoritePrompt = async (text: string) => {
-    const cat = detectCategory(text);
-    const isFav = await isFavoritePrompt(text);
-    if (isFav) {
-      const list = await getFavoritePrompts();
-      const target = list.find((p) => p.text === text);
-      if (target) await removeFavoritePrompt(target.id);
-    } else {
-      await addFavoritePrompt(text, cat);
-    }
-    await refreshFav();
-  };
-
-  const onClearRecent = () => {
-    Alert.alert('Geçmişi temizle', 'Son sorular silinsin mi?', [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: 'Temizle',
-        style: 'destructive',
-        onPress: async () => {
-          await clearRecentQuestions();
-          setRecent([]);
-        },
-      },
-    ]);
-  };
-
-  const prompts = PROMPTS_BY_CAT[activeCat];
+  const [nr, ng, nb] = hexToRgb(nicheColor);
+  const pastel = `rgb(${Math.round(nr + (255 - nr) * 0.78)}, ${Math.round(ng + (255 - ng) * 0.78)}, ${Math.round(nb + (255 - nb) * 0.78)})`;
+  const soft = `rgb(${Math.round(nr + (255 - nr) * 0.55)}, ${Math.round(ng + (255 - ng) * 0.55)}, ${Math.round(nb + (255 - nb) * 0.55)})`;
+  const deep = `rgb(${Math.round(nr * 0.4)}, ${Math.round(ng * 0.4)}, ${Math.round(nb * 0.4)})`;
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+    <ScrollView
+      style={[styles.container, { backgroundColor: '#5C6B4F' }]}
+      contentContainerStyle={styles.content}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('qa.title')}</Text>
-        <Pressable onPress={clearChat} style={styles.clearBtn}>
-          <Text style={styles.clearBtnText}>Temizle</Text>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.title}>💡 İlham Panosu</Text>
+            <PlanBadge size="sm" refreshKey={planRefresh} />
+          </View>
+          <Text style={styles.subtitle}>Günün ilhamı · fikir arama · hızlı ipuçları</Text>
+        </View>
+        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.closeBtn} hitSlop={8}>
+          <Text style={styles.closeBtnText}>✕</Text>
         </Pressable>
       </View>
 
-      <View style={styles.catRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-          {CATEGORIES.map((c) => (
-            <Pressable
-              key={c.id}
-              onPress={() => setActiveCat(c.id)}
-              style={[styles.catChip, activeCat === c.id && styles.catChipOn]}
-            >
-              <Text style={[styles.catIcon]}>{c.icon}</Text>
-              <Text style={[styles.catLabel, activeCat === c.id && styles.catLabelOn]}>{c.label}</Text>
-            </Pressable>
+      <Animated.View style={[styles.heroCard, { backgroundColor: pastel, borderColor: nicheColor, opacity: fade, transform: [{ scale: cardScale }] }]}>
+        <Text style={[styles.heroBadge, { color: deep }]}>🌅 GÜNÜN İLHAMI</Text>
+        <Text style={[styles.heroQuote, { color: deep }]}>"{todayQuote}"</Text>
+        <Text style={[styles.heroDate, { color: deep, opacity: 0.7 }]}>
+          {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </Text>
+        <View style={styles.dotRow}>
+          {QUOTES.map((_, i) => (
+            <View
+              key={i}
+              style={[styles.dot, i === quoteIdx ? { backgroundColor: nicheColor, width: 18 } : { backgroundColor: deep + '33' }]}
+            />
           ))}
-        </ScrollView>
-      </View>
+        </View>
+      </Animated.View>
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.messages}
-        contentContainerStyle={{ padding: 16 }}
-      >
-        {messages.map((m) => {
-          const lastUser = (() => {
-            const idx = messages.findIndex((mm) => mm.id === m.id);
-            return idx > 0 && messages[idx - 1].role === 'user';
-          })();
-          return (
-            <View key={m.id} style={[styles.bubbleWrap, m.role === 'user' ? styles.userWrap : styles.aiWrap]}>
-              <Pressable
-                onLongPress={() => copy(m.id, m.content)}
-                style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}
-              >
-                <Text style={m.role === 'user' ? styles.userText : styles.aiText}>{m.content}</Text>
-                {copiedId === m.id && <Text style={styles.copiedHint}>Kopyalandı</Text>}
-              </Pressable>
-              {m.role === 'assistant' && lastUser && (
-                <View style={styles.bubbleActions}>
-                  <Pressable onPress={() => copy(m.id, m.content)} style={styles.actionBtn}>
-                    <Text style={styles.actionText}>⧉ Kopyala</Text>
-                  </Pressable>
-                  <Pressable onPress={() => regenerate(m.id)} style={styles.actionBtn}>
-                    <Text style={styles.actionText}>↻ Yenile</Text>
-                  </Pressable>
+      <View style={styles.searchCard}>
+        <Text style={styles.sectionTitle}>🔎 Fikir Ara</Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Fikirlerinde ara... (başlık, etiket, açı)"
+          placeholderTextColor="#9CA3AF"
+          style={[styles.searchInput, { borderColor: nicheColor }]}
+        />
+        <Text style={styles.searchMeta}>
+          {filtered.length} sonuç{filtered.length !== 1 ? '' : ''} · Toplam {ideas.length} fikir
+        </Text>
+        {filtered.length === 0 && (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyEmoji}>🔍</Text>
+            <Text style={styles.emptyText}>
+              {ideas.length === 0
+                ? 'Henüz fikir bankında içerik yok. Ana sayfada "Akıllı Yenile" ile üret, sonra burada ara.'
+                : 'Aramayla eşleşen fikir bulunamadı. Farklı bir kelime dene.'}
+            </Text>
+            <Pressable onPress={() => router.push('/idea-bank')} style={[styles.emptyBtn, { backgroundColor: nicheColor }]}>
+              <Text style={styles.emptyBtnText}>Fikir Bankına Git ›</Text>
+            </Pressable>
+          </View>
+        )}
+        {filtered.map((idea) => (
+          <Pressable
+            key={idea.id}
+            onPress={() => router.push({ pathname: '/idea/[text]', params: { text: encodeURIComponent(idea.description ?? idea.title ?? ''), niche: niche ?? '', source: 'bank' } })}
+            style={[styles.resultRow, { borderLeftColor: nicheColor }]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.resultTitle} numberOfLines={1}>{idea.title ?? 'Adsız fikir'}</Text>
+              <Text style={styles.resultDesc} numberOfLines={2}>{idea.description ?? ''}</Text>
+              {idea.tags && idea.tags.length > 0 && (
+                <View style={styles.tagRow}>
+                  {idea.tags.slice(0, 3).map((tag) => (
+                    <View key={tag} style={[styles.tag, { backgroundColor: soft }]}>
+                      <Text style={[styles.tagText, { color: deep }]}>#{tag}</Text>
+                    </View>
+                  ))}
                 </View>
               )}
             </View>
+            <Text style={[styles.resultChev, { color: nicheColor }]}>›</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.tipsHeader}>
+        <Text style={styles.sectionTitle}>⚡ Hızlı İpuçları</Text>
+        <Text style={styles.tipsSub}>
+          {niche ? `${nicheEntry?.icon ?? ''} ${t(`niches.${niche}`, niche)} için özel ipucu + diğer nişlerden` : 'Tüm nişlerden seçilmiş 4 ipucu'}
+        </Text>
+      </View>
+      <View style={styles.tipsGrid}>
+        {tipsForNiche.map((tip) => {
+          const tipNiche = NICHES.find((n) => n.id === tip.id);
+          const tipColor = tipNiche?.color ?? '#2F3B25';
+          return (
+            <View key={tip.title} style={[styles.tipCard, { backgroundColor: '#FAFCF6', borderColor: tipColor }]}>
+              <View style={[styles.tipBadge, { backgroundColor: tipColor + '22', borderColor: tipColor }]}>
+                <Text style={[styles.tipEmoji]}>{tip.emoji}</Text>
+              </View>
+              <Text style={[styles.tipTitle, { color: tipColor }]}>{tip.title}</Text>
+              <Text style={styles.tipBody}>{tip.text}</Text>
+            </View>
           );
         })}
-        {busy && <ActivityIndicator style={{ marginVertical: 8 }} />}
-      </ScrollView>
-
-      {favPrompts.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⭐ Favori prompt'ların</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-            {favPrompts.map((p) => (
-              <Pressable key={p.id} onPress={() => send(p.text)} style={styles.favChip}>
-                <Text style={styles.favChipText} numberOfLines={1}>{p.text}</Text>
-                <Pressable onPress={() => toggleFavoritePrompt(p.text)} style={styles.favChipX}>
-                  <Text style={styles.favChipXText}>★</Text>
-                </Pressable>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      <View style={styles.quickRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}
-        >
-          {prompts.map((qp, i) => (
-            <View key={i} style={styles.quickChipWrap}>
-              <Pressable onPress={() => send(qp.text)} style={styles.quickChip}>
-                <Text style={styles.quickIcon}>{qp.icon}</Text>
-                <Text style={styles.quickText} numberOfLines={2}>{qp.text}</Text>
-              </Pressable>
-              <Pressable onPress={() => toggleFavoritePrompt(qp.text)} style={styles.quickStar}>
-                <Text style={styles.quickStarText}>
-                  {favPrompts.some((p) => p.text === qp.text) ? '★' : '☆'}
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
       </View>
 
-      {recent.length > 0 && (
-        <View style={styles.recentBox}>
-          <View style={styles.recentHead}>
-            <Text style={styles.recentTitle}>🕘 Son soruların</Text>
-            <Pressable onPress={onClearRecent}>
-              <Text style={styles.recentClear}>Temizle</Text>
-            </Pressable>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 16 }}>
-            {recent.map((r) => (
-              <Pressable key={`${r.askedAt}-${r.text}`} onPress={() => send(r.text)} style={styles.recentChip}>
-                <Text style={styles.recentChipText} numberOfLines={1}>{r.text}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder={t('qa.placeholder')}
-          value={input}
-          onChangeText={setInput}
-          multiline
-        />
-        <Pressable onPress={() => send()} style={styles.sendBtn} disabled={busy}>
-          <Text style={styles.sendText}>{t('qa.send')}</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+      <Pressable onPress={() => router.push('/idea-bank')} style={[styles.cta, { backgroundColor: nicheColor }]}>
+        <Text style={styles.ctaText}>💡 Fikir Bankını Aç ›</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: '800', color: '#111827' },
-  clearBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#F3F4F6', borderRadius: 8 },
-  clearBtnText: { color: '#6B7280', fontWeight: '600', fontSize: 12 },
-  catRow: { paddingVertical: 6, backgroundColor: 'white' },
-  catChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: '#F3F4F6', gap: 4 },
-  catChipOn: { backgroundColor: '#4D96FF' },
-  catIcon: { fontSize: 14 },
-  catLabel: { fontSize: 12, color: '#374151', fontWeight: '700' },
-  catLabelOn: { color: 'white' },
-  messages: { flex: 1 },
-  bubbleWrap: { marginBottom: 10, maxWidth: '88%' },
-  userWrap: { alignSelf: 'flex-end' },
-  aiWrap: { alignSelf: 'flex-start' },
-  bubble: { padding: 12, borderRadius: 14 },
-  userBubble: { backgroundColor: '#4D96FF' },
-  aiBubble: { backgroundColor: 'white' },
-  userText: { color: 'white' },
-  aiText: { color: '#111827' },
-  copiedHint: { marginTop: 4, fontSize: 10, color: '#10B981', fontWeight: '600' },
-  bubbleActions: { flexDirection: 'row', gap: 6, marginTop: 4 },
-  actionBtn: { paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#F3F4F6', borderRadius: 6 },
-  actionText: { fontSize: 10, color: '#6B7280', fontWeight: '700' },
-  section: { paddingVertical: 8, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  sectionTitle: { fontSize: 11, fontWeight: '800', color: '#6B7280', paddingHorizontal: 16, marginBottom: 6, letterSpacing: 0.5, textTransform: 'uppercase' },
-  favChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', borderColor: '#FCD34D', borderWidth: 1, paddingLeft: 10, paddingRight: 4, paddingVertical: 6, borderRadius: 14, maxWidth: 220, gap: 4 },
-  favChipText: { fontSize: 11, color: '#92400E', fontWeight: '700', flex: 1 },
-  favChipX: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: '#FCD34D' },
-  favChipXText: { fontSize: 11, color: '#92400E', fontWeight: '800' },
-  quickRow: { paddingVertical: 8, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  quickChipWrap: { position: 'relative', marginRight: 4 },
-  quickChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, maxWidth: 220, gap: 6, paddingRight: 32 },
-  quickIcon: { fontSize: 14 },
-  quickText: { fontSize: 12, color: '#1E40AF', fontWeight: '600' },
-  quickStar: { position: 'absolute', right: 6, top: 6, padding: 4 },
-  quickStarText: { fontSize: 13, color: '#F59E0B', fontWeight: '800' },
-  recentBox: { paddingVertical: 8, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  recentHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 6 },
-  recentTitle: { fontSize: 11, fontWeight: '800', color: '#6B7280', letterSpacing: 0.5, textTransform: 'uppercase' },
-  recentClear: { fontSize: 11, color: '#DC2626', fontWeight: '700' },
-  recentChip: { backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, maxWidth: 200 },
-  recentChipText: { fontSize: 11, color: '#374151', fontWeight: '600' },
-  inputRow: { flexDirection: 'row', padding: 12, backgroundColor: 'white', alignItems: 'flex-end', gap: 8 },
-  input: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, maxHeight: 120 },
-  sendBtn: { backgroundColor: '#4D96FF', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12 },
-  sendText: { color: 'white', fontWeight: '700' },
+  container: { flex: 1 },
+  content: { padding: 20, paddingTop: 60, paddingBottom: 60 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 12 },
+  title: { fontSize: 26, fontWeight: '800', color: '#FAFCF6' },
+  subtitle: { fontSize: 13, color: '#E8E4D2', marginTop: 4 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FAFCF6', justifyContent: 'center', alignItems: 'center' },
+  closeBtnText: { fontSize: 16, color: '#2F3B25', fontWeight: '800' },
+  heroCard: { borderRadius: 22, padding: 22, marginBottom: 18, borderWidth: 2 },
+  heroBadge: { fontSize: 11, fontWeight: '800', letterSpacing: 1.4, marginBottom: 10 },
+  heroQuote: { fontSize: 22, fontWeight: '700', lineHeight: 30, marginBottom: 10 },
+  heroDate: { fontSize: 12, fontWeight: '700', marginBottom: 12 },
+  dotRow: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  searchCard: { backgroundColor: '#FAFCF6', borderRadius: 18, padding: 16, marginBottom: 18 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: '#2F3B25', marginBottom: 10 },
+  searchInput: { backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#2F3B25' },
+  searchMeta: { fontSize: 11, color: '#6B7280', marginTop: 8, marginBottom: 10, fontWeight: '600' },
+  emptyBox: { alignItems: 'center', paddingVertical: 20 },
+  emptyEmoji: { fontSize: 36, marginBottom: 8 },
+  emptyText: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 18, marginBottom: 12 },
+  emptyBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+  emptyBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
+  resultRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderLeftWidth: 3, backgroundColor: '#F0F4ED', marginBottom: 8, gap: 10 },
+  resultTitle: { fontSize: 14, fontWeight: '800', color: '#2F3B25', marginBottom: 2 },
+  resultDesc: { fontSize: 12, color: '#374151', lineHeight: 16 },
+  resultChev: { fontSize: 22, fontWeight: '300' },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  tagText: { fontSize: 10, fontWeight: '700' },
+  tipsHeader: { marginBottom: 10 },
+  tipsSub: { fontSize: 11, color: '#E8E4D2', marginTop: -4, marginBottom: 10, fontWeight: '600' },
+  tipsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 18 },
+  tipCard: { width: '48%', padding: 12, borderRadius: 14, marginBottom: 10, borderWidth: 1.5 },
+  tipBadge: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8, borderWidth: 1 },
+  tipEmoji: { fontSize: 18 },
+  tipTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4 },
+  tipBody: { fontSize: 11, color: '#374151', lineHeight: 15 },
+  cta: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginBottom: 8 },
+  ctaText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
 });

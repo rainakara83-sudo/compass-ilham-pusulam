@@ -16,6 +16,7 @@ import {
   getConsistencyScore,
   ConsistencyScore,
 } from '../../services/storage';
+import PlanBadge from '../../components/PlanBadge';
 
 type Tile = { key: keyof Stats; label: string; icon: string; color: string };
 
@@ -37,6 +38,7 @@ export default function StatsScreen() {
   const [dailyTrend, setDailyTrend] = useState<DailyDonePoint[]>([]);
   const [pace, setPace] = useState<ProductionPace | null>(null);
   const [consistency, setConsistency] = useState<ConsistencyScore | null>(null);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   const load = useCallback(async () => {
     const [s, is, tr, dt, pc, cs] = await Promise.all([
@@ -58,6 +60,7 @@ export default function StatsScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      setPlanRefresh((x) => x + 1);
     }, [load])
   );
 
@@ -77,7 +80,10 @@ export default function StatsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
-      <Text style={styles.title}>📊 İstatistikler</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.title}>📊 İstatistikler</Text>
+        <PlanBadge size="sm" refreshKey={planRefresh} />
+      </View>
       <Text style={styles.subtitle}>
         {stats.lastWeekId ? `Son hafta: ${stats.lastWeekId}` : 'Henüz veri yok'}
       </Text>
@@ -299,7 +305,7 @@ const ProgressRow: React.FC<{ label: string; current: number; target: number; co
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 50 },
   subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16 },

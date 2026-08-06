@@ -16,6 +16,7 @@ import {
 } from '../../services/storage';
 import { NicheId, pickRandomFromPool } from '../../services/contentService';
 import { generateWeeklyIdeasWithAIResult } from '../../services/aiService';
+import PlanBadge from '../../components/PlanBadge';
 
 type Niche = { id: string; icon: string; color: string };
 const NICHE_MAP = (niches as Niche[]).reduce((acc, n) => {
@@ -61,6 +62,7 @@ export default function CalendarScreen() {
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [niche, setNiche] = useState<NicheId | null>(null);
+  const [planRefresh, setPlanRefresh] = useState(0);
 
   const load = useCallback(async () => {
     const [list, monthList, st, favs, n] = await Promise.all([
@@ -80,6 +82,7 @@ export default function CalendarScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      setPlanRefresh((x) => x + 1);
     }, [load])
   );
 
@@ -188,7 +191,10 @@ export default function CalendarScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
-      <Text style={styles.title}>📅 İçerik Takvimi</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.title}>📅 İçerik Takvimi</Text>
+        <PlanBadge size="sm" refreshKey={planRefresh} />
+      </View>
       <Text style={styles.subtitle}>Fikirlerini tarihe bağla, planını takip et</Text>
 
       <Pressable onPress={() => router.push('/weekly-planner')} style={styles.weekPlannerBtn}>
@@ -461,7 +467,7 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 50 },
   subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },

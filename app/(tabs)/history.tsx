@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { HistoryEntry, deleteHistoryEntry, getDoneIdeas, getFavorites, getHistory, saveWeekToHistory } from '../../services/storage';
 import niches from '../../data/niches.json';
+import PlanBadge from '../../components/PlanBadge';
 
 const ICONS = (niches as { id: string; icon: string }[]).reduce((acc, n) => {
   acc[n.id] = n.icon;
@@ -23,6 +24,7 @@ export default function HistoryScreen() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [favSet, setFavSet] = useState<Set<string>>(new Set());
+  const [planRefresh, setPlanRefresh] = useState(0);
   const [doneSet, setDoneSet] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
   const [compareA, setCompareA] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export default function HistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       load();
+      setPlanRefresh((x) => x + 1);
     }, [load])
   );
 
@@ -179,7 +182,10 @@ export default function HistoryScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
-      <Text style={styles.title}>🗂 Geçmiş Haftalar</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.title}>🗂 Geçmiş Haftalar</Text>
+        <PlanBadge size="sm" refreshKey={planRefresh} />
+      </View>
       <Text style={styles.subtitle}>{history.length} hafta kayıtlı</Text>
 
       {history.length > 0 && (
@@ -394,7 +400,7 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#5C6B4F' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 50 },
   subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
   searchRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
