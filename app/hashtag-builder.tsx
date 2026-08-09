@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   HASHTAG_PLATFORMS,
   HashtagLayer,
@@ -27,19 +29,29 @@ import {
 } from '../services/storage';
 import nichesData from '../data/niches.json';
 
-const LAYER_META: Record<HashtagLayer, { label: string; emoji: string; color: string; hint: string }> = {
-  core: { label: 'Çekirdek', emoji: '🧲', color: '#6366f1', hint: 'Geniş erişim, platformun ana havuzu' },
-  niche: { label: 'Niche', emoji: '🎯', color: '#10B981', hint: 'Senin alanına özel, doğrudan hedef kitle' },
-  community: { label: 'Topluluk', emoji: '🤝', color: '#0EA5E9', hint: 'Bölge/dil toplulukları, keşfedilebilirlik' },
-  trending: { label: 'Trend', emoji: '🔥', color: '#F59E0B', hint: 'Şu sıralar yüksek momentum taşıyanlar' },
-  longtail: { label: 'Long-tail', emoji: '🔬', color: '#8B5CF6', hint: 'Uzun kuyruk, az rekabet, kalıcı trafik' },
+const LAYER_COLORS: Record<HashtagLayer, string> = {
+  core: '#6366f1',
+  niche: '#10B981',
+  community: '#0EA5E9',
+  trending: '#F59E0B',
+  longtail: '#8B5CF6',
+};
+
+const LAYER_EMOJIS: Record<HashtagLayer, string> = {
+  core: '🧲',
+  niche: '🎯',
+  community: '🤝',
+  trending: '🔥',
+  longtail: '🔬',
 };
 
 const LAYER_ORDER: HashtagLayer[] = ['core', 'niche', 'community', 'trending', 'longtail'];
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  const localeTag = lng === 'tr' ? 'tr-TR' : lng === 'es' ? 'es-ES' : lng === 'de' ? 'de-DE' : lng === 'fr' ? 'fr-FR' : 'en-US';
+  return d.toLocaleDateString(localeTag, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
 const nicheMap = nichesData as { id: string; icon: string; description: string; color: string }[];
@@ -47,6 +59,7 @@ const nicheMap = nichesData as { id: string; icon: string; description: string; 
 export default function HashtagBuilderScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [list, setList] = useState<HashtagPack[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -75,8 +88,8 @@ export default function HashtagBuilderScreen() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(tm);
   }, [toast]);
 
   const platformMeta = useMemo(
@@ -86,7 +99,7 @@ export default function HashtagBuilderScreen() {
 
   const handleGenerate = () => {
     if (!topic.trim()) {
-      Alert.alert('Eksik bilgi', 'Konu / ana tema yaz ki long-tail hashtag üretebileyim.');
+      Alert.alert(t('hashtagBuilder.emptyTopicTitle'), t('hashtagBuilder.emptyTopicBody'));
       return;
     }
     setGenerating(true);
@@ -112,14 +125,14 @@ export default function HashtagBuilderScreen() {
     });
     setList(next);
     await addCopyToHistory(`[hashtag-pack] ${preview.niche}/${preview.platform}`);
-    setToast('Paket kaydedildi ✓');
+    setToast(t('hashtagBuilder.savedToast'));
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert('Paket silinsin mi?', 'Bu kayıt listeden çıkar.', [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('hashtagBuilder.deleteConfirmTitle'), t('hashtagBuilder.deleteConfirmBody'), [
+      { text: t('hashtagBuilder.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('hashtagBuilder.deleteBtn'),
         style: 'destructive',
         onPress: async () => {
           const next = await removeHashtagPack(id);
@@ -131,15 +144,15 @@ export default function HashtagBuilderScreen() {
 
   const handleClearAll = () => {
     if (list.length === 0) return;
-    Alert.alert('Tüm paketler silinsin mi?', 'Bu işlem geri alınamaz.', [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('hashtagBuilder.clearAllConfirmTitle'), t('hashtagBuilder.clearAllConfirmBody'), [
+      { text: t('hashtagBuilder.cancelBtn'), style: 'cancel' },
       {
-        text: 'Hepsini sil',
+        text: t('hashtagBuilder.deleteAllBtn'),
         style: 'destructive',
         onPress: async () => {
           await clearHashtagPacks();
           setList([]);
-          setToast('Liste temizlendi');
+          setToast(t('hashtagBuilder.clearedToast'));
         },
       },
     ]);
@@ -148,31 +161,34 @@ export default function HashtagBuilderScreen() {
   const copy = (label: string, text: string) => {
     Clipboard.setString(text);
     addCopyToHistory(`[hashtag-copy] ${label}`);
-    setToast(`${label} kopyalandı ✓`);
+    setToast(t('hashtagBuilder.copiedToast', { label }));
   };
 
   const renderLayer = (layer: HashtagLayer, items: string[]) => {
     if (items.length === 0) return null;
-    const meta = LAYER_META[layer];
+    const color = LAYER_COLORS[layer];
+    const emoji = LAYER_EMOJIS[layer];
+    const label = t(`hashtagBuilder.layer.${layer}`);
+    const hint = t(`hashtagBuilder.layerHint.${layer}`);
     return (
       <View key={layer} style={styles.layerBlock}>
         <View style={styles.layerHeader}>
-          <Text style={[styles.layerTitle, { color: meta.color }]}>
-            {meta.emoji} {meta.label}
+          <Text style={[styles.layerTitle, { color }]}>
+            {emoji} {label}
           </Text>
-          <Pressable onPress={() => copy(meta.label, items.join(' '))} hitSlop={6}>
-            <Text style={styles.copySmall}>📋 katman</Text>
+          <Pressable onPress={() => copy(label, items.join(' '))} hitSlop={6}>
+            <Text style={styles.copySmall}>{t('hashtagBuilder.copySmall')}</Text>
           </Pressable>
         </View>
-        <Text style={styles.layerHint}>{meta.hint}</Text>
+        <Text style={styles.layerHint}>{hint}</Text>
         <View style={styles.tagWrap}>
           {items.map((h, i) => (
             <Pressable
               key={`${layer}-${i}`}
-              style={[styles.tagChip, { borderColor: meta.color }]}
-              onPress={() => copy('Hashtag', h)}
+              style={[styles.tagChip, { borderColor: color }]}
+              onPress={() => copy(t('hashtagBuilder.copyHashtag'), h)}
             >
-              <Text style={[styles.tagText, { color: meta.color }]}>{h}</Text>
+              <Text style={[styles.tagText, { color }]}>{h}</Text>
             </Pressable>
           ))}
         </View>
@@ -182,24 +198,23 @@ export default function HashtagBuilderScreen() {
 
   return (
     <View style={styles.root}>
-      <Stack.Screen options={{ title: 'Hashtag Builder', headerShown: true }} />
+      <Stack.Screen options={{ title: t('hashtagBuilder.title'), headerShown: true }} />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>#️⃣ Hashtag Strategy Builder</Text>
+          <Text style={styles.heroTitle}>{t('hashtagBuilder.heroTitle')}</Text>
           <Text style={styles.heroSub}>
-            Niche × platform eşleştirmesiyle katmanlı hashtag paketi. Çekirdek + niche + topluluk +
-            trend + long-tail — hepsi platform limitine göre budanır.
+            {t('hashtagBuilder.heroSub')}
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Yeni Paket</Text>
+          <Text style={styles.sectionTitle}>{t('hashtagBuilder.newPack')}</Text>
 
-          <Text style={styles.label}>Niche</Text>
+          <Text style={styles.label}>{t('hashtagBuilder.nicheLabel')}</Text>
           <View style={styles.chipRow}>
             {nicheMap.map(n => {
               const active = niche === n.id;
@@ -220,7 +235,7 @@ export default function HashtagBuilderScreen() {
             })}
           </View>
 
-          <Text style={styles.label}>Platform</Text>
+          <Text style={styles.label}>{t('hashtagBuilder.platformLabel')}</Text>
           <View style={styles.chipRow}>
             {HASHTAG_PLATFORMS.map(p => {
               const active = platform === p.id;
@@ -238,22 +253,21 @@ export default function HashtagBuilderScreen() {
             })}
           </View>
 
-          <Text style={styles.label}>Konu / ana tema *</Text>
+          <Text style={styles.label}>{t('hashtagBuilder.topicLabel')}</Text>
           <TextInput
             style={styles.input}
             value={topic}
             onChangeText={setTopic}
-            placeholder="ör: sabah rutini, içerik üretimi"
+            placeholder={t('hashtagBuilder.topicPlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
           <View style={styles.tipBox}>
             <Text style={styles.tipTitle}>
-              {platformMeta.emoji} {platformMeta.label} — max {platformMeta.cap} hashtag
+              {t('hashtagBuilder.tipPlatform', { emoji: platformMeta.emoji, label: platformMeta.label, cap: platformMeta.cap })}
             </Text>
             <Text style={styles.tipText}>
-              Katmanlar sırayla yerleşir: çekirdek → niche → topluluk → trend → long-tail. Uzun
-              kuyruk az rekabet, çekirdek geniş erişim getirir.
+              {t('hashtagBuilder.tipLayers')}
             </Text>
           </View>
 
@@ -266,12 +280,12 @@ export default function HashtagBuilderScreen() {
               {generating ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.ctaText}>✨ Paket üret</Text>
+                <Text style={styles.ctaText}>{t('hashtagBuilder.generateBtn')}</Text>
               )}
             </Pressable>
             {preview ? (
               <Pressable style={[styles.cta, styles.ctaReroll]} onPress={handleReroll}>
-                <Text style={styles.ctaText}>🎲 Yenile</Text>
+                <Text style={styles.ctaText}>{t('hashtagBuilder.rerollBtn')}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -280,10 +294,10 @@ export default function HashtagBuilderScreen() {
         {preview ? (
           <View style={styles.section}>
             <View style={styles.previewHeader}>
-              <Text style={styles.sectionTitle}>Paket Önizleme</Text>
+              <Text style={styles.sectionTitle}>{t('hashtagBuilder.previewTitle')}</Text>
               <View style={[styles.capBadge]}>
                 <Text style={styles.capBadgeText}>
-                  {preview.fullList.length}/{platformMeta.cap}
+                  {t('hashtagBuilder.capBadge', { current: preview.fullList.length, cap: platformMeta.cap })}
                 </Text>
               </View>
             </View>
@@ -291,33 +305,33 @@ export default function HashtagBuilderScreen() {
             {LAYER_ORDER.map(layer => renderLayer(layer, preview.layers[layer]))}
 
             <View style={styles.fullBox}>
-              <Text style={styles.fullTitle}>📋 Tam liste (kopyala-yapıştır)</Text>
-              <Pressable onPress={() => copy('Tüm hashtagler', preview.fullList.join(' '))}>
+              <Text style={styles.fullTitle}>{t('hashtagBuilder.fullListTitle')}</Text>
+              <Pressable onPress={() => copy(t('hashtagBuilder.copyAllHashtags'), preview.fullList.join(' '))}>
                 <Text style={styles.fullText}>{preview.fullList.join(' ')}</Text>
               </Pressable>
             </View>
 
             <Pressable style={[styles.cta, styles.ctaSave]} onPress={handleSave}>
-              <Text style={styles.ctaText}>💾 Paketi kaydet</Text>
+              <Text style={styles.ctaText}>{t('hashtagBuilder.saveBtn')}</Text>
             </Pressable>
           </View>
         ) : null}
 
         <View style={styles.section}>
           <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Kayıtlı Paketler ({list.length})</Text>
+            <Text style={styles.sectionTitle}>{t('hashtagBuilder.savedTitle', { count: list.length })}</Text>
             {list.length > 0 ? (
               <Pressable onPress={handleClearAll} hitSlop={10}>
-                <Text style={styles.clearText}>Hepsini sil</Text>
+                <Text style={styles.clearText}>{t('hashtagBuilder.clearAll')}</Text>
               </Pressable>
             ) : null}
           </View>
 
           {list.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>#️⃣</Text>
+              <Text style={styles.emptyEmoji}>{t('hashtagBuilder.emptyEmoji')}</Text>
               <Text style={styles.emptyText}>
-                Henüz kayıtlı paket yok. Yukarıdan bir tane üret, buraya gelsin.
+                {t('hashtagBuilder.emptyText')}
               </Text>
             </View>
           ) : (
@@ -332,7 +346,7 @@ export default function HashtagBuilderScreen() {
                         {p.topic || p.niche}
                       </Text>
                       <Text style={styles.cardSub}>
-                        {formatDate(p.createdAt)} · {p.fullList.length} hashtag
+                        {t('hashtagBuilder.cardMeta', { date: formatDate(p.createdAt), count: p.fullList.length })}
                       </Text>
                     </View>
                   </View>
@@ -342,15 +356,15 @@ export default function HashtagBuilderScreen() {
                   <View style={styles.cardActions}>
                     <Pressable
                       style={[styles.smallBtn, styles.smallBtnPrimary]}
-                      onPress={() => copy('Paket', p.fullList.join(' '))}
+                      onPress={() => copy(t('hashtagBuilder.copyPack'), p.fullList.join(' '))}
                     >
-                      <Text style={styles.smallBtnText}>📋 Kopyala</Text>
+                      <Text style={styles.smallBtnText}>{t('hashtagBuilder.copyBtn')}</Text>
                     </Pressable>
                     <Pressable
                       style={[styles.smallBtn, styles.smallBtnDanger]}
                       onPress={() => handleDelete(p.id)}
                     >
-                      <Text style={styles.smallBtnText}>🗑️ Sil</Text>
+                      <Text style={styles.smallBtnText}>{t('hashtagBuilder.deleteBtn')}</Text>
                     </Pressable>
                   </View>
                 </View>

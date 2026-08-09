@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   ReplyEntry,
   ReplyIntent,
@@ -27,14 +29,10 @@ import {
   addCopyToHistory,
 } from '../services/storage';
 
-const formatDate = (ts: number): string => {
-  const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-};
-
 export default function CommentReplyBankScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [list, setList] = useState<ReplyEntry[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -83,45 +81,53 @@ export default function CommentReplyBankScreen() {
     setSaving(false);
     setComment('');
     setPreview(null);
-    setToast('Yorum + cevap kaydedildi ✓');
-  }, [preview]);
+    setToast(t('commentReplyBank.toastSaved'));
+  }, [preview, t]);
 
   const onRemove = useCallback(async (id: string) => {
-    Alert.alert('Sil', 'Bu kaydı silmek istediğine emin misin?', [
-      { text: 'Vazgeç', style: 'cancel' },
-      {
-        text: 'Sil',
-        style: 'destructive',
-        onPress: async () => {
-          const next = await removeReplyBank(id);
-          setList(next);
-          if (openId === id) setOpenId(null);
+    Alert.alert(
+      t('commentReplyBank.deleteAlertTitle'),
+      t('commentReplyBank.deleteAlertBody'),
+      [
+        { text: t('commentReplyBank.deleteAlertCancel'), style: 'cancel' },
+        {
+          text: t('commentReplyBank.deleteAlertConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            const next = await removeReplyBank(id);
+            setList(next);
+            if (openId === id) setOpenId(null);
+          },
         },
-      },
-    ]);
-  }, [openId]);
+      ]
+    );
+  }, [openId, t]);
 
   const onClear = useCallback(() => {
     if (list.length === 0) return;
-    Alert.alert('Tümünü sil', `${list.length} kayıt silinecek. Emin misin?`, [
-      { text: 'Vazgeç', style: 'cancel' },
-      {
-        text: 'Hepsini sil',
-        style: 'destructive',
-        onPress: async () => {
-          await clearReplyBanks();
-          setList([]);
-          setToast('Tüm kayıtlar silindi');
+    Alert.alert(
+      t('commentReplyBank.clearAllAlertTitle'),
+      t('commentReplyBank.clearAllAlertBody', { count: list.length }),
+      [
+        { text: t('commentReplyBank.deleteAlertCancel'), style: 'cancel' },
+        {
+          text: t('commentReplyBank.clearAllAlertConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            await clearReplyBanks();
+            setList([]);
+            setToast(t('commentReplyBank.toastCleared'));
+          },
         },
-      },
-    ]);
-  }, [list.length]);
+      ]
+    );
+  }, [list.length, t]);
 
   const onCopy = useCallback(async (text: string) => {
     Clipboard.setString(text);
     await addCopyToHistory(text, 'pool');
-    setToast('Kopyalandı ✓');
-  }, []);
+    setToast(t('commentReplyBank.toastCopied'));
+  }, [t]);
 
   const onSaveNotes = useCallback(
     async (id: string) => {
@@ -129,14 +135,14 @@ export default function CommentReplyBankScreen() {
       if (note === undefined) return;
       const next = await updateReplyBank(id, { notes: note });
       setList(next);
-      setToast('Not güncellendi ✓');
+      setToast(t('commentReplyBank.toastNoteSaved'));
       setNotesDraft(prev => {
         const c = { ...prev };
         delete c[id];
         return c;
       });
     },
-    [notesDraft]
+    [notesDraft, t]
   );
 
   const summary = useMemo(() => {
@@ -156,7 +162,7 @@ export default function CommentReplyBankScreen() {
     <View style={styles.root}>
       <Stack.Screen
         options={{
-          title: 'Reply Bank',
+          title: t('commentReplyBank.title'),
           headerStyle: { backgroundColor: '#0f172a' },
           headerTintColor: '#f8fafc',
         }}
@@ -167,22 +173,22 @@ export default function CommentReplyBankScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.intro}>
-          Aldığın bir yorumu yapıştır, niyet + ton seç. Farklı tonlarda cevap önerileri al.
+          {t('commentReplyBank.subtitle')}
         </Text>
 
         {/* COMMENT INPUT */}
-        <Text style={styles.sectionLabel}>Yorum</Text>
+        <Text style={styles.sectionLabel}>{t('commentReplyBank.labelComment')}</Text>
         <TextInput
           value={comment}
           onChangeText={setComment}
-          placeholder="Gelen yorum..."
+          placeholder={t('commentReplyBank.placeholderComment')}
           placeholderTextColor="#475569"
           style={styles.commentInput}
           multiline
         />
 
         {/* INTENT */}
-        <Text style={styles.sectionLabel}>Yorum niyeti</Text>
+        <Text style={styles.sectionLabel}>{t('commentReplyBank.labelIntent')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {intentKeys.map(ik => {
             const meta = REPLYBANK_INTENTS[ik];
@@ -201,7 +207,7 @@ export default function CommentReplyBankScreen() {
         </ScrollView>
 
         {/* TONE */}
-        <Text style={styles.sectionLabel}>Cevap tonu</Text>
+        <Text style={styles.sectionLabel}>{t('commentReplyBank.labelTone')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {toneKeys.map(tk => {
             const meta = REPLYBANK_TONES[tk];
@@ -223,19 +229,19 @@ export default function CommentReplyBankScreen() {
         {preview && (
           <View style={styles.previewCard}>
             <View style={styles.commentBox}>
-              <Text style={styles.commentLabel}>💬 Yorum</Text>
+              <Text style={styles.commentLabel}>{t('commentReplyBank.sectionComment')}</Text>
               <Text style={styles.commentText}>{preview.comment}</Text>
             </View>
 
             <Text style={styles.tip}>💡 {REPLYBANK_INTENTS[preview.intent].tip}</Text>
 
-            <Text style={styles.sectionTitle}>📋 Cevap önerileri ({preview.suggestions.length})</Text>
+            <Text style={styles.sectionTitle}>{t('commentReplyBank.sectionReplies', { count: preview.suggestions.length })}</Text>
             {preview.suggestions.map(s => {
               const isBest = s.id === preview.bestId;
               const tMeta = REPLYBANK_TONES[s.tone];
               return (
                 <View key={s.id} style={[styles.suggRow, isBest && styles.suggRowBest]}>
-                  {isBest && <Text style={styles.bestBadge}>⭐ ÖNERİLEN</Text>}
+                  {isBest && <Text style={styles.bestBadge}>{t('commentReplyBank.badgeBest')}</Text>}
                   <View style={styles.suggHeader}>
                     <View style={styles.tonePill}>
                       <Text style={styles.tonePillEmoji}>{tMeta.emoji}</Text>
@@ -243,10 +249,10 @@ export default function CommentReplyBankScreen() {
                     </View>
                     <Text style={styles.lengthText}>{s.text.length}kr</Text>
                   </View>
-                  <Text style={styles.suggText}>{s.text || '(boş — yorumu yanıtlama)'}</Text>
+                  <Text style={styles.suggText}>{s.text || t('commentReplyBank.emptyReply')}</Text>
                   {s.text.length > 0 && (
                     <Pressable onPress={() => onCopy(s.text)} style={styles.suggCopyBtn}>
-                      <Text style={styles.suggCopyBtnText}>📋 Kopyala</Text>
+                      <Text style={styles.suggCopyBtnText}>{t('commentReplyBank.copyBtn')}</Text>
                     </Pressable>
                   )}
                 </View>
@@ -262,10 +268,10 @@ export default function CommentReplyBankScreen() {
         {/* SAVED LIST */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>🗂️ Kayıtlı Yorumlar ({list.length})</Text>
+            <Text style={styles.cardTitle}>{t('commentReplyBank.savedTitle', { count: list.length })}</Text>
             {list.length > 0 && (
               <Pressable onPress={onClear}>
-                <Text style={styles.clearBtn}>Tümünü sil</Text>
+                <Text style={styles.clearBtn}>{t('commentReplyBank.clearAll')}</Text>
               </Pressable>
             )}
           </View>
@@ -273,14 +279,14 @@ export default function CommentReplyBankScreen() {
           {list.length > 0 && (
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Toplam öneri</Text>
+                <Text style={styles.summaryLabel}>{t('commentReplyBank.statTotal')}</Text>
                 <Text style={styles.summaryValue}>{summary.totalSuggestions}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Ortalama/yorum</Text>
+                <Text style={styles.summaryLabel}>{t('commentReplyBank.statAvg')}</Text>
                 <Text style={styles.summaryValue}>{summary.avgSuggestions}</Text>
               </View>
-              <Text style={[styles.summaryLabel, { marginTop: 8, marginBottom: 4 }]}>Niyet dağılımı</Text>
+              <Text style={[styles.summaryLabel, { marginTop: 8, marginBottom: 4 }]}>{t('commentReplyBank.statIntents')}</Text>
               <View style={styles.intentRow}>
                 {intentKeys.map(ik => {
                   const cnt = summary.intentCount[ik] ?? 0;
@@ -298,7 +304,7 @@ export default function CommentReplyBankScreen() {
           )}
 
           {list.length === 0 ? (
-            <Text style={styles.empty}>Henüz kayıt yok. Yukarıdan yorum yapıştır.</Text>
+            <Text style={styles.empty}>{t('commentReplyBank.empty')}</Text>
           ) : (
             list.map(e => {
               const intentMeta = REPLYBANK_INTENTS[e.intent];
@@ -311,7 +317,7 @@ export default function CommentReplyBankScreen() {
                         {intentMeta?.emoji} {e.comment}
                       </Text>
                       <Text style={styles.entryMeta}>
-                        {intentMeta?.label} · {e.suggestions.length} öneri
+                        {intentMeta?.label} · {t('commentReplyBank.suggestionsCount', { count: e.suggestions.length })}
                       </Text>
                     </View>
                     <Text style={styles.entryChevron}>{open ? '▲' : '▼'}</Text>
@@ -330,21 +336,21 @@ export default function CommentReplyBankScreen() {
                               </Text>
                               <Text style={styles.entrySuggLen}>{s.text.length}kr</Text>
                             </View>
-                            <Text style={styles.entrySuggText}>{s.text || '(boş)'}</Text>
+                            <Text style={styles.entrySuggText}>{s.text || t('commentReplyBank.emptyReply')}</Text>
                             {s.text.length > 0 && (
                               <Pressable onPress={() => onCopy(s.text)} style={styles.entryCopyBtn}>
-                                <Text style={styles.entryCopyBtnText}>📋 Kopyala</Text>
+                                <Text style={styles.entryCopyBtnText}>{t('commentReplyBank.copyBtn')}</Text>
                               </Pressable>
                             )}
                           </View>
                         );
                       })}
 
-                      <Text style={styles.entryLabel}>Notlar</Text>
+                      <Text style={styles.entryLabel}>{t('commentReplyBank.notes')}</Text>
                       <TextInput
                         value={notesDraft[e.id] ?? e.notes}
                         onChangeText={txt => setNotesDraft(prev => ({ ...prev, [e.id]: txt }))}
-                        placeholder="Not ekle..."
+                        placeholder={t('commentReplyBank.notesPlaceholder')}
                         placeholderTextColor="#475569"
                         style={styles.notesInput}
                         multiline
@@ -355,10 +361,10 @@ export default function CommentReplyBankScreen() {
                           disabled={notesDraft[e.id] === undefined}
                           style={[styles.smallBtn, notesDraft[e.id] === undefined && { opacity: 0.4 }]}
                         >
-                          <Text style={styles.smallBtnText}>💾 Notu kaydet</Text>
+                          <Text style={styles.smallBtnText}>{t('commentReplyBank.saveNoteBtn')}</Text>
                         </Pressable>
                         <Pressable onPress={() => onRemove(e.id)} style={[styles.smallBtn, { borderColor: '#F97316' }]}>
-                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>🗑️ Sil</Text>
+                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>{t('commentReplyBank.deleteBtn')}</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -370,7 +376,7 @@ export default function CommentReplyBankScreen() {
         </View>
 
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+          <Text style={styles.backBtnText}>{t('commentReplyBank.back')}</Text>
         </Pressable>
       </ScrollView>
 

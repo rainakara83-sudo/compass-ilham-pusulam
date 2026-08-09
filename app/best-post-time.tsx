@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import i18n from '../i18n';
 import {
   BPTAudience,
   BPTEntry,
@@ -30,7 +31,12 @@ import {
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  try {
+    return d.toLocaleDateString(lng, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return d.toLocaleDateString('en', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
 };
 
 const scoreColor = (s: number): string => {
@@ -39,8 +45,6 @@ const scoreColor = (s: number): string => {
   if (s >= 40) return '#F59E0B';
   return '#F97316';
 };
-
-const DAYS_TR = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
 
 export default function BestPostTimeScreen() {
   const router = useRouter();

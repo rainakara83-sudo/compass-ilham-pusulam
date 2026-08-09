@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   PillarEntry,
   PillarSlot,
@@ -25,22 +26,25 @@ import {
   addCopyToHistory,
 } from '../services/storage';
 import niches from '../data/niches.json';
+import i18n from '../i18n';
 
-const NICHES: { id: string; icon: string; color: string; label: string }[] = niches.map(n => ({
+const NICHES: { id: string; icon: string; color: string }[] = niches.map(n => ({
   id: n.id,
   icon: n.icon,
   color: n.color,
-  label: n.id.replace('_', ' '),
 }));
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  const localeTag = lng === 'tr' ? 'tr-TR' : lng === 'es' ? 'es-ES' : lng === 'de' ? 'de-DE' : lng === 'fr' ? 'fr-FR' : 'en-US';
+  return d.toLocaleDateString(localeTag, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
 export default function ContentPillarsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [list, setList] = useState<PillarEntry[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -64,8 +68,8 @@ export default function ContentPillarsScreen() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(tm);
   }, [toast]);
 
   const generate = useCallback(() => {
@@ -83,14 +87,14 @@ export default function ContentPillarsScreen() {
     const next = await savePillar({ niche, pillars: preview, notes: '' });
     setList(next);
     setSaving(false);
-    setToast('Pillar seti kaydedildi ✓');
-  }, [preview, niche]);
+    setToast(t('contentMap.savedToast'));
+  }, [preview, niche, t]);
 
   const onRemove = useCallback(async (id: string) => {
-    Alert.alert('Sil', 'Bu pillar setini silmek istediğine emin misin?', [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('contentMap.removeConfirmTitle'), t('contentMap.removeConfirmBody'), [
+      { text: t('contentMap.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           const next = await removePillar(id);
@@ -99,29 +103,29 @@ export default function ContentPillarsScreen() {
         },
       },
     ]);
-  }, [openId]);
+  }, [openId, t]);
 
   const onClear = useCallback(() => {
     if (list.length === 0) return;
-    Alert.alert('Tümünü sil', `${list.length} pillar seti silinecek. Emin misin?`, [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('contentMap.clearConfirmTitle'), t('contentMap.clearConfirmBody', { count: list.length }), [
+      { text: t('contentMap.cancelBtn'), style: 'cancel' },
       {
-        text: 'Hepsini sil',
+        text: t('contentMap.clearConfirmBtn'),
         style: 'destructive',
         onPress: async () => {
           await clearPillars();
           setList([]);
-          setToast('Tüm pillar setleri silindi');
+          setToast(t('contentMap.clearedToast'));
         },
       },
     ]);
-  }, [list.length]);
+  }, [list.length, t]);
 
   const onCopy = useCallback(async (text: string) => {
     Clipboard.setString(text);
     await addCopyToHistory(text, 'pool');
-    setToast('Kopyalandı ✓');
-  }, []);
+    setToast(t('contentMap.copiedToast'));
+  }, [t]);
 
   const onSaveNotes = useCallback(
     async (id: string) => {
@@ -129,14 +133,14 @@ export default function ContentPillarsScreen() {
       if (note === undefined) return;
       const next = await updatePillar(id, { notes: note });
       setList(next);
-      setToast('Not güncellendi ✓');
+      setToast(t('contentMap.notesUpdatedToast'));
       setNotesDraft(prev => {
         const c = { ...prev };
         delete c[id];
         return c;
       });
     },
-    [notesDraft]
+    [notesDraft, t]
   );
 
   const summary = useMemo(() => {
@@ -151,14 +155,14 @@ export default function ContentPillarsScreen() {
     return { purposeCount, totalPillars, avgPillars };
   }, [list]);
 
-  const nicheLabel = (id: string) => NICHES.find(n => n.id === id)?.label ?? id;
+  const nicheLabel = (id: string) => t(`niches.${id}`, id);
   const nicheIcon = (id: string) => NICHES.find(n => n.id === id)?.icon ?? '📌';
 
   return (
     <View style={styles.root}>
       <Stack.Screen
         options={{
-          title: 'Content Pillars',
+          title: t('contentMap.title'),
           headerStyle: { backgroundColor: '#0f172a' },
           headerTintColor: '#f8fafc',
         }}
@@ -169,11 +173,11 @@ export default function ContentPillarsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.intro}>
-          Niche seç, otomatik içerik pillar (sütun) önerisi al. Her sütun farklı bir amaca hizmet eder.
+          {t('contentMap.intro')}
         </Text>
 
         {/* NICHE */}
-        <Text style={styles.sectionLabel}>Niche</Text>
+        <Text style={styles.sectionLabel}>{t('contentMap.sectionNiche')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {NICHES.map(n => {
             const active = niche === n.id;
@@ -184,14 +188,14 @@ export default function ContentPillarsScreen() {
                 style={[styles.chip, active && { backgroundColor: n.color, borderColor: n.color }]}
               >
                 <Text style={styles.chipIcon}>{n.icon}</Text>
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{n.label}</Text>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{nicheLabel(n.id)}</Text>
               </Pressable>
             );
           })}
         </ScrollView>
 
         {/* COUNT */}
-        <Text style={styles.sectionLabel}>Pillar sayısı</Text>
+        <Text style={styles.sectionLabel}>{t('contentMap.sectionCount')}</Text>
         <View style={styles.countRow}>
           {['3', '4', '5', '6'].map(c => {
             const active = count === c;
@@ -209,7 +213,7 @@ export default function ContentPillarsScreen() {
 
         {/* PREVIEW */}
         <View style={styles.previewCard}>
-          <Text style={styles.previewTitle}>📊 Pillar Dağılımı</Text>
+          <Text style={styles.previewTitle}>{t('contentMap.previewTitle')}</Text>
 
           <View style={styles.barRow}>
             {preview.map((p, idx) => (
@@ -219,7 +223,7 @@ export default function ContentPillarsScreen() {
               />
             ))}
           </View>
-          <Text style={styles.barCaption}>Haftalık içerik dağılımı (%)</Text>
+          <Text style={styles.barCaption}>{t('contentMap.barCaption')}</Text>
 
           {preview.map((p, idx) => {
             const purpose = PILLAR_PURPOSES[p.purpose];
@@ -234,7 +238,7 @@ export default function ContentPillarsScreen() {
                       <Text style={[styles.pillarPillText, { color: p.color }]}>{purpose.label}</Text>
                     </View>
                   </View>
-                  <Text style={styles.pillarRatio}>📐 %{p.ratio} pay</Text>
+                  <Text style={styles.pillarRatio}>{t('contentMap.ratioLabel', { ratio: p.ratio })}</Text>
                   <Text style={styles.pillarTip}>💡 {purpose.tip}</Text>
                   <View style={styles.examplesRow}>
                     {p.examples.map((ex, j) => (
@@ -249,17 +253,17 @@ export default function ContentPillarsScreen() {
           })}
 
           <Pressable onPress={onSave} disabled={saving || preview.length === 0} style={[styles.saveBtn, (saving || preview.length === 0) && { opacity: 0.5 }]}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>💾 Seti kaydet</Text>}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{t('contentMap.saveBtn')}</Text>}
           </Pressable>
         </View>
 
         {/* SAVED LIST */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>🗂️ Kayıtlı Setler ({list.length})</Text>
+            <Text style={styles.cardTitle}>{list.length > 0 ? t('contentMap.savedTitleWithCount', { count: list.length }) : t('contentMap.savedTitle')}</Text>
             {list.length > 0 && (
               <Pressable onPress={onClear}>
-                <Text style={styles.clearBtn}>Tümünü sil</Text>
+                <Text style={styles.clearBtn}>{t('contentMap.clearAll')}</Text>
               </Pressable>
             )}
           </View>
@@ -267,14 +271,14 @@ export default function ContentPillarsScreen() {
           {list.length > 0 && (
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Toplam pillar</Text>
+                <Text style={styles.summaryLabel}>{t('contentMap.totalPillars')}</Text>
                 <Text style={styles.summaryValue}>{summary.totalPillars}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Ortalama/set</Text>
+                <Text style={styles.summaryLabel}>{t('contentMap.avgPerSet')}</Text>
                 <Text style={styles.summaryValue}>{summary.avgPillars}</Text>
               </View>
-              <Text style={[styles.summaryLabel, { marginTop: 8, marginBottom: 4 }]}>Amaç dağılımı</Text>
+              <Text style={[styles.summaryLabel, { marginTop: 8, marginBottom: 4 }]}>{t('contentMap.purposeDistribution')}</Text>
               <View style={styles.purposeRow}>
                 {(Object.keys(PILLAR_PURPOSES) as PillarSlot['purpose'][]).map(pk => {
                   const cnt = summary.purposeCount[pk] ?? 0;
@@ -292,7 +296,7 @@ export default function ContentPillarsScreen() {
           )}
 
           {list.length === 0 ? (
-            <Text style={styles.empty}>Henüz pillar set yok. Yukarıdan niche seç.</Text>
+            <Text style={styles.empty}>{t('contentMap.emptyList')}</Text>
           ) : (
             list.map(e => {
               const open = openId === e.id;
@@ -304,7 +308,7 @@ export default function ContentPillarsScreen() {
                         {nicheIcon(e.niche)} {nicheLabel(e.niche)}
                       </Text>
                       <Text style={styles.entryMeta}>
-                        {e.pillars.length} pillar · {formatDate(e.createdAt)}
+                        {t('contentMap.pillarCountMeta', { count: e.pillars.length, date: formatDate(e.createdAt) })}
                       </Text>
                     </View>
                     <Text style={styles.entryChevron}>{open ? '▲' : '▼'}</Text>
@@ -339,21 +343,21 @@ export default function ContentPillarsScreen() {
                                 ))}
                               </View>
                               <Pressable
-                                onPress={() => onCopy(`📌 ${p.name} — ${purpose.label}\nÖrnekler: ${p.examples.join(', ')}`)}
+                                onPress={() => onCopy(t('contentMap.copyFormat', { name: p.name, purpose: purpose.label, examples: p.examples.join(', ') }))}
                                 style={styles.pillarCopyBtn}
                               >
-                                <Text style={styles.pillarCopyBtnText}>📋 Kopyala</Text>
+                                <Text style={styles.pillarCopyBtnText}>{t('contentMap.copyBtn')}</Text>
                               </Pressable>
                             </View>
                           </View>
                         );
                       })}
 
-                      <Text style={styles.entryLabel}>Notlar</Text>
+                      <Text style={styles.entryLabel}>{t('contentMap.notesLabel')}</Text>
                       <TextInput
                         value={notesDraft[e.id] ?? e.notes}
                         onChangeText={txt => setNotesDraft(prev => ({ ...prev, [e.id]: txt }))}
-                        placeholder="Not ekle..."
+                        placeholder={t('contentMap.notesPlaceholder')}
                         placeholderTextColor="#475569"
                         style={styles.notesInput}
                         multiline
@@ -364,10 +368,10 @@ export default function ContentPillarsScreen() {
                           disabled={notesDraft[e.id] === undefined}
                           style={[styles.smallBtn, notesDraft[e.id] === undefined && { opacity: 0.4 }]}
                         >
-                          <Text style={styles.smallBtnText}>💾 Notu kaydet</Text>
+                          <Text style={styles.smallBtnText}>{t('contentMap.saveNotesBtn')}</Text>
                         </Pressable>
                         <Pressable onPress={() => onRemove(e.id)} style={[styles.smallBtn, { borderColor: '#F97316' }]}>
-                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>🗑️ Sil</Text>
+                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>{t('contentMap.deleteBtn')}</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -379,7 +383,7 @@ export default function ContentPillarsScreen() {
         </View>
 
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+          <Text style={styles.backBtnText}>{t('contentMap.backBtn')}</Text>
         </Pressable>
       </ScrollView>
 

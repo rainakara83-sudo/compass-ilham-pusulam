@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { requestNotificationPermission } from '../../services/notificationService';
 
 export default function PermissionsStep() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [notifications, setNotifications] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [busy, setBusy] = useState(false);
 
@@ -22,42 +24,42 @@ export default function PermissionsStep() {
   return (
     <View style={styles.container}>
       <View style={styles.stepBadge}>
-        <Text style={styles.stepText}>4 / 4</Text>
+        <Text style={styles.stepText}>{t('onboardingFlow.stepOf', { current: 4, total: 4 })}</Text>
       </View>
-      <Text style={styles.title}>🔔 Bildirimler</Text>
-      <Text style={styles.subtitle}>İçerik hatırlatıcılarını ve günün fikrini kaçırma</Text>
+      <Text style={styles.title}>🔔 {t('reminders.title')}</Text>
+      <Text style={styles.subtitle}>{t('onboardingFlow.permissionsSubtitle')}</Text>
 
       <View style={styles.card}>
         <View style={styles.cardRow}>
           <Text style={styles.icon}>🔔</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Bildirim izni</Text>
-            <Text style={styles.cardSub}>Hatırlatma ve günün fikri için izin ver.</Text>
+            <Text style={styles.cardTitle}>{t('reminders.title')}</Text>
+            <Text style={styles.cardSub}>{t('onboardingFlow.permissionsCardSub')}</Text>
             {notifications !== 'unknown' && (
               <Text style={[styles.status, notifications === 'granted' ? styles.statusOk : styles.statusBad]}>
-                {notifications === 'granted' ? '✓ İzin verildi' : '✕ Reddedildi'}
+                {notifications === 'granted' ? '✓ ' + t('reminders.permissionGranted') : '✕ ' + t('reminders.permissionDenied')}
               </Text>
             )}
           </View>
         </View>
         <Pressable onPress={askNotifications} disabled={busy} style={[styles.btn, notifications === 'granted' && styles.btnDone]}>
-          <Text style={styles.btnText}>{busy ? '...' : notifications === 'granted' ? 'Tekrar iste' : 'İzin ver'}</Text>
+          <Text style={styles.btnText}>{busy ? t('onboardingFlow.permissionsWorking') : notifications === 'granted' ? t('onboardingFlow.permissionsReask') : t('onboardingFlow.permissionsGrant')}</Text>
         </Pressable>
       </View>
 
       <View style={[styles.card, styles.tipsCard]}>
-        <Text style={styles.tipTitle}>💡 İpucu</Text>
+        <Text style={styles.tipTitle}>{t('onboardingFlow.permissionsTipTitle')}</Text>
         <Text style={styles.tipText}>
-          İzinleri sonra da Ayarlar bölümünden yönetebilirsin. Şimdi atlasan da uygulamayı kullanabilirsin.
+          {t('onboardingFlow.permissionsTipBody')}
         </Text>
       </View>
 
       <View style={styles.footer}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+          <Text style={styles.backBtnText}>{t('onboardingFlow.nicheBack')}</Text>
         </Pressable>
         <Pressable onPress={finish} style={[styles.cta, { flex: 1 }]}>
-          <Text style={styles.ctaText}>Başla 🚀</Text>
+          <Text style={styles.ctaText}>{t('onboardingFlow.experienceStart')}</Text>
         </Pressable>
       </View>
     </View>

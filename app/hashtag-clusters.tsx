@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   Pressable,
   ScrollView,
@@ -32,10 +34,24 @@ const formatNumber = (n: number): string => {
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)}`;
+  const lng = (i18n.language || 'en').split('-')[0];
+  if (lng === 'tr') {
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)}`;
+  }
+  if (lng === 'de') {
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear())}`;
+  }
+  if (lng === 'es') {
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
+  }
+  if (lng === 'fr') {
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
+  }
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
 };
 
 export default function HashtagClustersScreen() {
+  const { t } = useTranslation();
   const [pillar, setPillar] = useState<string>('productivity');
   const [customPillar, setCustomPillar] = useState<string>('');
   const [platform, setPlatform] = useState<HClusterPlatform>('instagram');
@@ -122,13 +138,11 @@ export default function HashtagClustersScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>🏷️ Hashtag Kümeleri</Text>
-      <Text style={styles.subtitle}>
-        Aynı niyete hizmet eden, birbiriyle uyumlu hashtag paketleri oluştur.
-      </Text>
+      <Text style={styles.title}>🏷️ {t('hClusters.title')}</Text>
+      <Text style={styles.subtitle}>{t('hClusters.subtitle')}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>1) İçerik Sütunu</Text>
+        <Text style={styles.sectionTitle}>{t('hClusters.pillarLabel')}</Text>
         <View style={styles.chipRow}>
           {suggestions.map(s => (
             <Pressable
@@ -148,14 +162,14 @@ export default function HashtagClustersScreen() {
         <TextInput
           value={customPillar}
           onChangeText={setCustomPillar}
-          placeholder="Veya kendi sütununu yaz…"
+          placeholder={t('hClusters.pillarPlaceholder')}
           placeholderTextColor="#64748b"
           style={styles.input}
         />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>2) Platform</Text>
+        <Text style={styles.sectionTitle}>{t('hClusters.platformLabel')}</Text>
         <View style={styles.chipRow}>
           {HCLUSTER_PLATFORMS.map(p => (
             <Pressable
@@ -164,7 +178,7 @@ export default function HashtagClustersScreen() {
               style={[styles.chip, platform === p.id ? styles.chipActive : null]}
             >
               <Text style={[styles.chipText, platform === p.id ? styles.chipTextActive : null]}>
-                {p.emoji} {p.label} (max {p.max})
+                {p.emoji} {t(`hClusters.platform.${p.id}`, p.label)} (max {p.max})
               </Text>
             </Pressable>
           ))}
@@ -172,7 +186,7 @@ export default function HashtagClustersScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>3) Niyet</Text>
+        <Text style={styles.sectionTitle}>{t('hClusters.intentLabel')}</Text>
         <View style={styles.chipRow}>
           {HCLUSTER_INTENTS.map(i => (
             <Pressable
@@ -181,28 +195,28 @@ export default function HashtagClustersScreen() {
               style={[styles.chip, intent === i.id ? styles.chipActive : null]}
             >
               <Text style={[styles.chipText, intent === i.id ? styles.chipTextActive : null]}>
-                {i.emoji} {i.label}
+                {i.emoji} {t(`hClusters.intents.${i.id}.label`, i.label)}
               </Text>
             </Pressable>
           ))}
         </View>
         <Text style={styles.helperText}>
-          {HCLUSTER_INTENTS.find(i => i.id === intent)?.desc}
+          {t(`hClusters.intents.${intent}.desc`, HCLUSTER_INTENTS.find(i => i.id === intent)?.desc ?? '')}
         </Text>
       </View>
 
       <Pressable onPress={onGenerate} style={styles.generateBtn}>
-        <Text style={styles.generateBtnText}>Küme Oluştur</Text>
+        <Text style={styles.generateBtnText}>{t('hClusters.generate')}</Text>
       </Pressable>
 
       {pack ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📦 Paket Önizleme</Text>
+          <Text style={styles.sectionTitle}>📦 {t('hClusters.packPreview')}</Text>
           <Text style={styles.packTitle}>
-            {pack.pillar} · {HCLUSTER_INTENTS.find(i => i.id === pack.intent)?.label}
+            {pack.pillar} · {t(`hClusters.intents.${pack.intent}.label`, HCLUSTER_INTENTS.find(i => i.id === pack.intent)?.label ?? '')}
           </Text>
           <Text style={styles.helperText}>
-            Tahmini erişim: ~{formatNumber(pack.estReach)} gösterim
+            {t('hClusters.estReach', { reach: formatNumber(pack.estReach) })}
           </Text>
           <View style={styles.tagWrap}>
             {pack.tags.map(t => (
@@ -214,11 +228,11 @@ export default function HashtagClustersScreen() {
           <View style={styles.btnRow}>
             <Pressable onPress={onCopyTags} style={styles.secondaryBtn}>
               <Text style={styles.secondaryBtnText}>
-                {copied ? '✓ Kopyalandı' : 'Etiketleri Kopyala'}
+                {copied ? '✓ ' + t('hClusters.copied') : t('hClusters.copyTags')}
               </Text>
             </Pressable>
             <Pressable onPress={onSave} style={styles.primaryBtn}>
-              <Text style={styles.primaryBtnText}>Kaydet</Text>
+              <Text style={styles.primaryBtnText}>{t('hClusters.save')}</Text>
             </Pressable>
           </View>
         </View>
@@ -226,31 +240,31 @@ export default function HashtagClustersScreen() {
 
       {list.length > 0 ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📊 Genel Durum</Text>
+          <Text style={styles.sectionTitle}>📊 {t('hClusters.overview')}</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{list.length}</Text>
-              <Text style={styles.statLabel}>Toplam Küme</Text>
+              <Text style={styles.statLabel}>{t('hClusters.totalClusters')}</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{formatNumber(totalReach)}</Text>
-              <Text style={styles.statLabel}>Toplam Erişim</Text>
+              <Text style={styles.statLabel}>{t('hClusters.totalReach')}</Text>
             </View>
             {topEntry ? (
               <View style={styles.statBox}>
                 <Text style={styles.statNum}>{formatNumber(topEntry.reach)}</Text>
-                <Text style={styles.statLabel}>En İyi Paket</Text>
+                <Text style={styles.statLabel}>{t('hClusters.bestPack')}</Text>
               </View>
             ) : null}
           </View>
 
-          <Text style={styles.subSection}>Niyet Dağılımı</Text>
+          <Text style={styles.subSection}>{t('hClusters.intentBreakdown')}</Text>
           {HCLUSTER_INTENTS.map(i => {
             const count = intentBreakdown[i.id] ?? 0;
             if (count === 0) return null;
             return (
               <View key={i.id} style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>{i.emoji} {i.label}</Text>
+                <Text style={styles.breakdownLabel}>{i.emoji} {t(`hClusters.intents.${i.id}.label`, i.label)}</Text>
                 <View style={styles.barTrack}>
                   <View
                     style={[
@@ -264,13 +278,13 @@ export default function HashtagClustersScreen() {
             );
           })}
 
-          <Text style={styles.subSection}>Platform Dağılımı</Text>
+          <Text style={styles.subSection}>{t('hClusters.platformBreakdown')}</Text>
           {HCLUSTER_PLATFORMS.map(p => {
             const count = platformBreakdown[p.id] ?? 0;
             if (count === 0) return null;
             return (
               <View key={p.id} style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>{p.emoji} {p.label}</Text>
+                <Text style={styles.breakdownLabel}>{p.emoji} {t(`hClusters.platform.${p.id}`, p.label)}</Text>
                 <View style={styles.barTrack}>
                   <View
                     style={[
@@ -289,9 +303,9 @@ export default function HashtagClustersScreen() {
       {list.length > 0 ? (
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.sectionTitle}>💾 Kayıtlı Kümeler</Text>
+            <Text style={styles.sectionTitle}>💾 {t('hClusters.savedClusters')}</Text>
             <Pressable onPress={onClear}>
-              <Text style={styles.clearLink}>Tümünü sil</Text>
+              <Text style={styles.clearLink}>{t('hClusters.clearAll')}</Text>
             </Pressable>
           </View>
           {list.map(e => {
@@ -304,11 +318,11 @@ export default function HashtagClustersScreen() {
                     {platformMeta?.emoji} {e.pillar}
                   </Text>
                   <Pressable onPress={() => onRemove(e.id)}>
-                    <Text style={styles.removeLink}>Sil</Text>
+                    <Text style={styles.removeLink}>{t('hClusters.delete')}</Text>
                   </Pressable>
                 </View>
                 <Text style={styles.entryMeta}>
-                  {intentMeta?.emoji} {intentMeta?.label} · ~{formatNumber(e.reach)} · {formatDate(e.createdAt)}
+                  {intentMeta?.emoji} {t(`hClusters.intents.${e.intent}.label`, intentMeta?.label ?? '')} · ~{formatNumber(e.reach)} · {formatDate(e.createdAt)}
                 </Text>
                 <View style={styles.tagWrap}>
                   {e.tags.map(t => (

@@ -10,49 +10,31 @@ import {
   View,
 } from 'react-native';
 import Constants from 'expo-constants';
+import { useTranslation } from 'react-i18next';
 import PlanBadge from '../../components/PlanBadge';
-
-type FaqItem = { q: string; a: string };
-
-const FAQS: FaqItem[] = [
-  {
-    q: 'Fikirler nereden geliyor?',
-    a: 'İki kaynaktan: 1) 9 niş için önceden hazırlanmış 270+ fikir havuzu, 2) Yapay zeka modu ile nişine özel anlık üretim.',
-  },
-  {
-    q: 'Yapay zekaya API anahtarı vermem mi gerek?',
-    a: 'İstemezsen gerek yok. Sadece havuz modunu kullanabilirsin. İstersen backend-example klasöründeki örnek proxy kendi anahtarınla çalışır.',
-  },
-  {
-    q: 'İnternetsiz çalışır mı?',
-    a: 'Evet, uygulamayı ilk kez açtığında tüm içerikler cihazına kaydedilir (AsyncStorage). Bu sayede:\n• Fikir üretme ✓\n• Streak takibi ✓\n• İçerik bankası ✓\n• Planlama & takvim ✓\n• Tüm kayıtlı nişler ✓\n\nSadece şu özellikler internet gerektirir:\n• AI destekli fikir üretimi (cloud API)\n• Q&A Asistanı (yakında)\n• Yeni niş ekleme\n\nİnternet olmadığında uygulama normal çalışır, sadece AI özellikleri "akıllı havuz" (offline kayıtlı fikirler) ile devreye girer. İnternet geldiğinde otomatik senkronize olur.',
-  },
-  {
-    q: 'Bildirimler çalışmıyor?',
-    a: 'Sistem ayarlarından bildirim iznini kontrol et. Hatırlatma eklediğinde uygulama kapalıyken de gelir.',
-  },
-  {
-    q: 'Verilerim nerede saklanıyor?',
-    a: 'Telefonunda AsyncStorage içinde. İnternet paylaşımı yapmaz. Ayarlardan dilediğin zaman sıfırlayabilirsin.',
-  },
-  {
-    q: 'Yeni niş ekleyebilir miyim?',
-    a: 'Şimdilik 9 niş destekleniyor. data/content-pool.json dosyasına yeni fikirler ekleyebilirsin.',
-  },
-  {
-    q: 'Streak nasıl çalışıyor?',
-    a: 'Ana sayfayı açtığında bugün kaydedilir. Üst üste günlere göre serini artar.',
-  },
-];
+import PageHint from '../../components/PageHint';
+import { useTheme } from '../../services/theme';
 
 const APP_VERSION = (Constants.expoConfig?.version as string) ?? '1.0.0';
 
 export default function InfoScreen() {
+  const { t } = useTranslation();
+  const { isDark } = useTheme();
   const [open, setOpen] = useState<number | null>(0);
-  const [planRefresh, setPlanRefresh] = useState(0);
+  const [planRefresh] = useState(0);
+
+  const FAQS = [
+    { q: t('info.faq1q'), a: t('info.faq1a') },
+    { q: t('info.faq2q'), a: t('info.faq2a') },
+    { q: t('info.faq3q'), a: t('info.faq3a') },
+    { q: t('info.faq4q'), a: t('info.faq4a') },
+    { q: t('info.faq5q'), a: t('info.faq5a') },
+    { q: t('info.faq6q'), a: t('info.faq6a') },
+    { q: t('info.faq7q'), a: t('info.faq7a') },
+  ];
 
   const onFeedback = async () => {
-    const url = 'mailto:hello@contentcoach.app?subject=Compass%20Geri%20Bildirim&body=Merhaba%20Compass%20ekibi%2C%0A%0A';
+    const url = 'mailto:hello@contentcoach.app?subject=Compass%20Feedback&body=';
     try {
       const supported = await Linking.canOpenURL(url);
       if (supported) {
@@ -64,8 +46,8 @@ export default function InfoScreen() {
         return;
       }
       await Share.share({
-        message: 'Compass — İlham Pusulam geri bildirim: ',
-        title: 'Geri bildirim',
+        message: t('info.shareMsg'),
+        title: t('info.shareTitle'),
       });
     } catch {}
   };
@@ -80,14 +62,15 @@ export default function InfoScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <PageHint hintId="info" title={t('pageHints.info.title')} description={t('pageHints.info.desc')} />
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>Bilgi & Destek</Text>
+            <Text style={styles.title}>{t('info.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>SSS, sürüm ve iletişim</Text>
+          <Text style={styles.subtitle}>{t('info.subtitle')}</Text>
         </View>
       </View>
 
@@ -95,11 +78,11 @@ export default function InfoScreen() {
         <Text style={styles.brandIcon}>🧭</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.brandName}>Compass</Text>
-          <Text style={styles.brandSub}>İlham Pusulam · v{APP_VERSION}</Text>
+          <Text style={styles.brandSub}>{t('info.brandSub', { version: APP_VERSION })}</Text>
         </View>
       </View>
 
-      <Text style={styles.section}>Sık Sorulan Sorular</Text>
+      <Text style={styles.section}>{t('info.sectionFaq')}</Text>
       {FAQS.map((f, i) => {
         const isOpen = open === i;
         return (
@@ -117,23 +100,20 @@ export default function InfoScreen() {
         );
       })}
 
-      <Text style={styles.section}>İletişim</Text>
+      <Text style={styles.section}>{t('info.sectionContact')}</Text>
       <Pressable onPress={onFeedback} style={styles.actionBtn}>
-        <Text style={styles.actionText}>💬 Geri bildirim gönder</Text>
+        <Text style={styles.actionText}>{t('info.feedbackBtn')}</Text>
       </Pressable>
       <Pressable onPress={onMail} style={styles.actionBtn}>
-        <Text style={styles.actionText}>📧 hello@contentcoach.app</Text>
+        <Text style={styles.actionText}>{t('info.mailBtn')}</Text>
       </Pressable>
 
-      <Text style={styles.section}>Hakkında</Text>
+      <Text style={styles.section}>{t('info.sectionAbout')}</Text>
       <View style={styles.aboutCard}>
-        <Text style={styles.aboutBody}>
-          Compass — İlham Pusulam, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
-          Tüm veriler cihazında saklanır.
-        </Text>
+        <Text style={styles.aboutBody}>{t('info.aboutBody')}</Text>
       </View>
 
-      <Text style={styles.creditText}>Made with ❤️ in 2026</Text>
+      <Text style={styles.creditText}>{t('info.credit')}</Text>
     </ScrollView>
   );
 }

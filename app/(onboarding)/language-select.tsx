@@ -1,10 +1,12 @@
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, SupportedLng, setAppLanguage } from '../../i18n';
 
 export default function LanguageSelect() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const pick = async (lng: SupportedLng) => {
     await setAppLanguage(lng);
@@ -14,10 +16,10 @@ export default function LanguageSelect() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingTop: 80, paddingHorizontal: 20, paddingBottom: 40 }}>
       <View style={styles.stepBadge}>
-        <Text style={styles.stepText}>1 / 4</Text>
+        <Text style={styles.stepText}>{t('onboardingFlow.stepOf', { current: 1, total: 4 })}</Text>
       </View>
-      <Text style={styles.title}>🌍 Dilini seç</Text>
-      <Text style={styles.subtitle}>Uygulama içinde kullanmak istediğin dili seç</Text>
+      <Text style={styles.title}>{t('onboardingFlow.languageTitle')}</Text>
+      <Text style={styles.subtitle}>{t('onboardingFlow.languageSubtitle')}</Text>
 
       {SUPPORTED_LANGUAGES.map((lng) => (
         <Pressable

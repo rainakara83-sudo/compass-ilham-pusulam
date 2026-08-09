@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import i18n from '../i18n';
 import {
   PostingOverride,
   PostingPlatform,
@@ -19,8 +20,13 @@ import {
   setPostingOverride,
   slotMeta,
 } from '../services/storage';
+import { useTranslation } from 'react-i18next';
+import { getShortDayLabels } from '../services/storage';
 
-const DAY_LABELS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+const getDayLabels = (): string[] => {
+  const labels = getShortDayLabels();
+  return [labels[0], labels[1], labels[2], labels[3], labels[4], labels[5], labels[6]];
+};
 
 const POSTING_PLATFORMS: { id: PostingPlatform; label: string; emoji: string; color: string }[] = [
   { id: 'instagram', label: 'Instagram', emoji: '📸', color: '#E1306C' },
@@ -38,9 +44,11 @@ const HOUR_LABELS: string[] = Array.from({ length: 24 }, (_, h) =>
 export default function PostingHeatmapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { i18n: i18nInstance } = useTranslation();
   const [platform, setPlatform] = useState<PostingPlatform>('instagram');
   const [overrides, setOverrides] = useState<PostingOverride[]>([]);
   const [selected, setSelected] = useState<{ day: number; hour: number } | null>(null);
+  const DAY_LABELS = useMemo(() => getDayLabels(), [i18nInstance.language]);
 
   const load = useCallback(async () => {
     const o = await getPostingOverrides();

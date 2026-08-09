@@ -2,7 +2,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
+import i18n from '../../i18n';
 import niches from '../../data/niches.json';
+import { checkAchievements } from '../../services/achievements';
 import {
   ScheduleEntry,
   addScheduleEntry,
@@ -17,18 +20,13 @@ import {
 import { NicheId, pickRandomFromPool } from '../../services/contentService';
 import { generateWeeklyIdeasWithAIResult } from '../../services/aiService';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
 
 type Niche = { id: string; icon: string; color: string };
 const NICHE_MAP = (niches as Niche[]).reduce((acc, n) => {
   acc[n.id] = n;
   return acc;
 }, {} as Record<string, Niche>);
-
-const MONTH_NAMES = [
-  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-];
-const DAY_NAMES_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const dateKey = (y: number, m: number, d: number) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
@@ -49,6 +47,7 @@ const buildMonthGrid = (year: number, month: number): (number | null)[] => {
 export default function CalendarScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { isDark } = useTheme();
   const today = useMemo(() => new Date(), []);
   const [cursor, setCursor] = useState({ year: today.getFullYear(), month: today.getMonth() });
   const [selectedDate, setSelectedDate] = useState<string>(dateKey(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -116,10 +115,11 @@ export default function CalendarScreen() {
   const onAdd = async () => {
     const text = newText.trim();
     if (!text) {
-      Alert.alert('Boş fikir', 'Önce fikir metnini yaz.');
+      Alert.alert(t('calendar.emptyAlertTitle'), t('calendar.emptyAlertMsg'));
       return;
     }
     await addScheduleEntry(text, selectedDate, niche, undefined);
+    void checkAchievements();
     setNewText('');
     await load();
   };
@@ -144,7 +144,7 @@ export default function CalendarScreen() {
   const runAISuggestions = async () => {
     if (!niche) {
       setAiSuggestions([]);
-      Alert.alert('Niş seç', 'AI önerisi için önce Ayarlar\'dan bir niş seç.');
+      Alert.alert(t('calendar.nicheAlertTitle'), t('calendar.nicheAlertMsg'));
       return;
     }
     setAiLoading(true);
@@ -155,6 +155,7 @@ export default function CalendarScreen() {
 
   const onPickIdea = async (text: string) => {
     await addScheduleEntry(text, selectedDate, niche, undefined);
+    void checkAchievements();
     setShowPicker(false);
     setAiSuggestions([]);
     setPoolSuggestions([]);
@@ -167,10 +168,10 @@ export default function CalendarScreen() {
   };
 
   const onRemove = (id: string) => {
-    Alert.alert('Planı sil', 'Bu planı takvimden kaldır?', [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('calendar.deleteAlertTitle'), t('calendar.deleteAlertMsg'), [
+      { text: t('calendar.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('calendar.deleteBtn'),
         style: 'destructive',
         onPress: async () => {
           await removeScheduleEntry(id);
@@ -190,17 +191,18 @@ export default function CalendarScreen() {
     new Date(cursor.year, cursor.month, d).getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <PageHint hintId="calendar" title={t('pageHints.calendar.title')} description={t('pageHints.calendar.desc')} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.title}>📅 İçerik Takvimi</Text>
+        <Text style={styles.title}>📅 {t('calendar.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
-      <Text style={styles.subtitle}>Fikirlerini tarihe bağla, planını takip et</Text>
+      <Text style={styles.subtitle}>{t('calendar.subtitle')}</Text>
 
       <Pressable onPress={() => router.push('/weekly-planner')} style={styles.weekPlannerBtn}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.weekPlannerTitle}>🗓 Haftalık Planlayıcı</Text>
-          <Text style={styles.weekPlannerSub}>7 güne toplu fikir ata, haftayı kopyala</Text>
+          <Text style={styles.weekPlannerTitle}>{t('calendar.weekPlannerTitle')}</Text>
+          <Text style={styles.weekPlannerSub}>{t('calendar.weekPlannerSub')}</Text>
         </View>
         <Text style={styles.weekPlannerChev}>›</Text>
       </Pressable>
@@ -208,15 +210,15 @@ export default function CalendarScreen() {
       <View style={styles.statsRow}>
         <View style={styles.statChip}>
           <Text style={styles.statValue}>{stats.planned}</Text>
-          <Text style={styles.statLabel}>Planlı</Text>
+          <Text style={styles.statLabel}>{t('calendar.statPlanned')}</Text>
         </View>
         <View style={styles.statChip}>
           <Text style={[styles.statValue, { color: '#10B981' }]}>{stats.done}</Text>
-          <Text style={styles.statLabel}>Üretildi</Text>
+          <Text style={styles.statLabel}>{t('calendar.statDone')}</Text>
         </View>
         <View style={styles.statChip}>
           <Text style={[styles.statValue, { color: '#4D96FF' }]}>{stats.upcoming}</Text>
-          <Text style={styles.statLabel}>Sıradaki</Text>
+          <Text style={styles.statLabel}>{t('calendar.statUpcoming')}</Text>
         </View>
       </View>
 
@@ -226,7 +228,7 @@ export default function CalendarScreen() {
             <Text style={styles.navBtnText}>‹</Text>
           </Pressable>
           <Text style={styles.monthTitle}>
-            {MONTH_NAMES[cursor.month]} {cursor.year}
+            {new Intl.DateTimeFormat((i18n.language || 'en').split('-')[0], { month: 'long' }).format(new Date(cursor.year, cursor.month, 1)).replace(/^./, (c) => c.toLocaleUpperCase((i18n.language || 'en').split('-')[0]))} {cursor.year}
           </Text>
           <Pressable onPress={goNext} style={styles.navBtn}>
             <Text style={styles.navBtnText}>›</Text>
@@ -234,8 +236,8 @@ export default function CalendarScreen() {
         </View>
 
         <View style={styles.weekRow}>
-          {DAY_NAMES_SHORT.map((d) => (
-            <Text key={d} style={styles.weekLabel}>{d}</Text>
+          {(['mon','tue','wed','thu','fri','sat','sun'] as const).map((k) => (
+            <Text key={k} style={styles.weekLabel}>{t(`weekdays.${k}`)}</Text>
           ))}
         </View>
 
@@ -284,14 +286,14 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.dayHeader}>
-        <Text style={styles.dayHeaderTitle}>📌 {new Date(selectedDate).toLocaleDateString('tr-TR', { weekday: 'long', day: '2-digit', month: 'long' })}</Text>
-        <Text style={styles.dayHeaderCount}>{selectedEntries.length} planlı</Text>
+        <Text style={styles.dayHeaderTitle}>📌 {new Date(selectedDate).toLocaleDateString((i18n.language || 'en'), { weekday: 'long', day: '2-digit', month: 'long' })}</Text>
+        <Text style={styles.dayHeaderCount}>{t('calendar.dayHeaderCount', { count: selectedEntries.length })}</Text>
       </View>
 
       <View style={styles.addRow}>
         <TextInput
           style={styles.addInput}
-          placeholder="Bu güne fikir ekle..."
+          placeholder={t('calendar.addIdeaPlaceholder')}
           value={newText}
           onChangeText={setNewText}
           placeholderTextColor="#9CA3AF"
@@ -303,22 +305,22 @@ export default function CalendarScreen() {
       <View style={styles.shortcutRow}>
         <Pressable onPress={() => openPicker('favorites')} style={styles.shortcutChip}>
           <Text style={styles.shortcutIcon}>⭐</Text>
-          <Text style={styles.shortcutLabel}>Favorilerden</Text>
+          <Text style={styles.shortcutLabel}>{t('calendar.shortcutFavorites')}</Text>
         </Pressable>
         <Pressable onPress={() => openPicker('pool')} style={styles.shortcutChip}>
           <Text style={styles.shortcutIcon}>📚</Text>
-          <Text style={styles.shortcutLabel}>Havuzdan</Text>
+          <Text style={styles.shortcutLabel}>{t('calendar.shortcutPool')}</Text>
         </Pressable>
         <Pressable onPress={() => openPicker('ai')} style={styles.shortcutChip}>
           <Text style={styles.shortcutIcon}>✨</Text>
-          <Text style={styles.shortcutLabel}>AI önerisi</Text>
+          <Text style={styles.shortcutLabel}>{t('calendar.shortcutAi')}</Text>
         </Pressable>
       </View>
 
       {selectedEntries.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🌱</Text>
-          <Text style={styles.emptyText}>Bu gün için plan yok.</Text>
+          <Text style={styles.emptyText}>{t('calendar.emptyDay')}</Text>
         </View>
       ) : (
         selectedEntries.map((e) => {
@@ -332,7 +334,7 @@ export default function CalendarScreen() {
                 <Text style={[styles.entryText, e.done && styles.entryTextDone]} numberOfLines={3}>{e.text}</Text>
                 {e.note && <Text style={styles.entryNote}>{e.note}</Text>}
                 <Text style={styles.entryMeta}>
-                  {e.done ? '✓ Üretildi' : isPast(new Date(e.date).getDate()) ? '⏰ Geçti' : '🗓 Bekliyor'}
+                  {e.done ? t('calendar.entryDone') : isPast(new Date(e.date).getDate()) ? t('calendar.entryPast') : t('calendar.entryWaiting')}
                 </Text>
               </Pressable>
               <Pressable onPress={() => onRemove(e.id)} style={styles.removeBtn}>
@@ -347,17 +349,17 @@ export default function CalendarScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Fikir ekle</Text>
+              <Text style={styles.modalTitle}>{t('calendar.modalTitle')}</Text>
               <Pressable onPress={() => setShowPicker(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </Pressable>
             </View>
             <View style={styles.tabRow}>
               {([
-                { id: 'write', icon: '✍️', label: 'Elle' },
-                { id: 'favorites', icon: '⭐', label: 'Favoriler' },
-                { id: 'pool', icon: '📚', label: 'Havuz' },
-                { id: 'ai', icon: '✨', label: 'AI' },
+                { id: 'write', icon: '✍️', label: t('calendar.tabWrite') },
+                { id: 'favorites', icon: '⭐', label: t('calendar.tabFavorites') },
+                { id: 'pool', icon: '📚', label: t('calendar.tabPool') },
+                { id: 'ai', icon: '✨', label: t('calendar.tabAi') },
               ] as const).map((tab) => (
                 <Pressable
                   key={tab.id}
@@ -373,10 +375,10 @@ export default function CalendarScreen() {
             <ScrollView contentContainerStyle={styles.modalBody}>
               {pickerTab === 'write' && (
                 <View>
-                  <Text style={styles.modalHint}>Bu güne eklemek istediğin fikri yaz.</Text>
+                  <Text style={styles.modalHint}>{t('calendar.modalHintWrite')}</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="Fikir metni..."
+                    placeholder={t('calendar.ideaPlaceholder')}
                     value={newText}
                     onChangeText={setNewText}
                     placeholderTextColor="#9CA3AF"
@@ -390,7 +392,7 @@ export default function CalendarScreen() {
                     style={[styles.modalSubmit, !newText.trim() && { opacity: 0.4 }]}
                     disabled={!newText.trim()}
                   >
-                    <Text style={styles.modalSubmitText}>➕ Bu güne ekle</Text>
+                    <Text style={styles.modalSubmitText}>{t('calendar.modalAddBtn')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -398,7 +400,7 @@ export default function CalendarScreen() {
               {pickerTab === 'favorites' && (
                 <View>
                   {favorites.length === 0 ? (
-                    <Text style={styles.modalHint}>Henüz favorin yok. Ana sayfadan ☆ ile birkaç fikir kaydet.</Text>
+                    <Text style={styles.modalHint}>{t('calendar.modalFavEmpty')}</Text>
                   ) : (
                     favorites.map((f, idx) => (
                       <Pressable
@@ -417,9 +419,9 @@ export default function CalendarScreen() {
               {pickerTab === 'pool' && (
                 <View>
                   {!niche ? (
-                    <Text style={styles.modalHint}>Önce Ayarlar'dan bir niş seç.</Text>
+                    <Text style={styles.modalHint}>{t('calendar.modalPickNiche')}</Text>
                   ) : poolSuggestions.length === 0 ? (
-                    <Text style={styles.modalHint}>Havuzdan öneri alınamadı.</Text>
+                    <Text style={styles.modalHint}>{t('calendar.modalPoolEmpty')}</Text>
                   ) : (
                     poolSuggestions.map((s, idx) => (
                       <Pressable key={`${s}-${idx}`} onPress={() => onPickIdea(s)} style={styles.modalIdeaCard}>
@@ -429,7 +431,7 @@ export default function CalendarScreen() {
                     ))
                   )}
                   <Pressable onPress={() => openPicker('pool')} style={styles.modalRefresh}>
-                    <Text style={styles.modalRefreshText}>🔄 Yenile</Text>
+                    <Text style={styles.modalRefreshText}>{t('calendar.modalRefresh')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -437,14 +439,14 @@ export default function CalendarScreen() {
               {pickerTab === 'ai' && (
                 <View>
                   {!niche ? (
-                    <Text style={styles.modalHint}>Önce Ayarlar'dan bir niş seç.</Text>
+                    <Text style={styles.modalHint}>{t('calendar.modalPickNiche')}</Text>
                   ) : aiLoading ? (
                     <View style={styles.modalLoading}>
                       <ActivityIndicator color="#4D96FF" />
-                      <Text style={styles.modalHint}>AI fikir üretiyor…</Text>
+                      <Text style={styles.modalHint}>{t('calendar.modalAiLoading')}</Text>
                     </View>
                   ) : aiSuggestions.length === 0 ? (
-                    <Text style={styles.modalHint}>AI şu an cevap veremedi. Yenile ya da havuzu dene.</Text>
+                    <Text style={styles.modalHint}>{t('calendar.modalAiEmpty')}</Text>
                   ) : (
                     aiSuggestions.map((s, idx) => (
                       <Pressable key={`${s}-${idx}`} onPress={() => onPickIdea(s)} style={styles.modalIdeaCard}>
@@ -454,7 +456,7 @@ export default function CalendarScreen() {
                     ))
                   )}
                   <Pressable onPress={runAISuggestions} style={styles.modalRefresh}>
-                    <Text style={styles.modalRefreshText}>🔄 Yeniden üret</Text>
+                    <Text style={styles.modalRefreshText}>{t('calendar.modalAiRegen')}</Text>
                   </Pressable>
                 </View>
               )}

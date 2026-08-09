@@ -26,42 +26,74 @@ import {
 } from '../../services/storage';
 import { NicheImage } from '../../components/NicheImage';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
+import BadgeGrid from '../../components/BadgeGrid';
+import BadgeToast from '../../components/BadgeToast';
+import { checkAchievements, AchievementBadge } from '../../services/achievements';
+import i18n, { setAppLanguage, SUPPORTED_LANGUAGES, SupportedLng } from '../../i18n';
+import { useTheme } from '../../services/theme';
 
 type Niche = { id: string; icon: string; color: string; image?: string };
 
-const LEVEL_META: Record<ExperienceLevel, { icon: string; label: string; color: string }> = {
-  beginner: { icon: '🌱', label: 'Yeni başlıyorum', color: '#10B981' },
-  intermediate: { icon: '🚀', label: 'Büyüyorum', color: '#4D96FF' },
-  pro: { icon: '👑', label: 'Profesyonelim', color: '#F59E0B' },
+const LEVEL_KEY: Record<ExperienceLevel, string> = {
+  beginner: 'profile.levelBeginner',
+  intermediate: 'profile.levelIntermediate',
+  pro: 'profile.levelPro',
 };
 
-const GOAL_META: Record<ContentGoal, { icon: string; label: string; color: string }> = {
-  growth: { icon: '📈', label: 'Büyümek', color: '#4D96FF' },
-  engagement: { icon: '💬', label: 'Etkileşim', color: '#8B5CF6' },
-  monetize: { icon: '💰', label: 'Gelir', color: '#10B981' },
-  community: { icon: '🤝', label: 'Topluluk', color: '#F472B6' },
+const GOAL_KEY: Record<ContentGoal, string> = {
+  growth: 'profile.goalGrowth',
+  engagement: 'profile.goalEngagement',
+  monetize: 'profile.goalMonetize',
+  community: 'profile.goalCommunity',
+};
+
+const BADGE_KEY: Record<string, string> = {
+  'fav-5': 'profile.badgeFav5',
+  'fav-10': 'profile.badgeFav10',
+  'fav-50': 'profile.badgeFav50',
+  'streak-3': 'profile.badgeStreak3',
+  'streak-7': 'profile.badgeStreak7',
+  'streak-30': 'profile.badgeStreak30',
+  'ideas-50': 'profile.badgeIdeas50',
+  'ideas-100': 'profile.badgeIdeas100',
+  'done-10': 'profile.badgeDone10',
+  'done-50': 'profile.badgeDone50',
+};
+
+const LEVEL_META: Record<ExperienceLevel, { icon: string; color: string }> = {
+  beginner: { icon: '🌱', color: '#10B981' },
+  intermediate: { icon: '🚀', color: '#4D96FF' },
+  pro: { icon: '👑', color: '#F59E0B' },
+};
+
+const GOAL_META: Record<ContentGoal, { icon: string; color: string }> = {
+  growth: { icon: '📈', color: '#4D96FF' },
+  engagement: { icon: '💬', color: '#8B5CF6' },
+  monetize: { icon: '💰', color: '#10B981' },
+  community: { icon: '🤝', color: '#F472B6' },
 };
 
 type Badge = {
   id: string;
   icon: string;
-  title: string;
+  titleKey: string;
   threshold: number;
   metric: 'fav' | 'streak' | 'ideas' | 'done';
   color: string;
 };
 
 const BADGES: Badge[] = [
-  { id: 'fav-5', icon: '⭐', title: '5 favori', threshold: 5, metric: 'fav', color: '#F59E0B' },
-  { id: 'fav-10', icon: '⭐', title: '10 favori', threshold: 10, metric: 'fav', color: '#D97706' },
-  { id: 'fav-50', icon: '🏆', title: '50 favori', threshold: 50, metric: 'fav', color: '#B45309' },
-  { id: 'streak-3', icon: '🔥', title: '3 gün streak', threshold: 3, metric: 'streak', color: '#F97316' },
-  { id: 'streak-7', icon: '🔥', title: '7 gün streak', threshold: 7, metric: 'streak', color: '#EA580C' },
-  { id: 'streak-30', icon: '🏆', title: '30 gün streak', threshold: 30, metric: 'streak', color: '#C2410C' },
-  { id: 'ideas-50', icon: '💡', title: '50 fikir', threshold: 50, metric: 'ideas', color: '#4D96FF' },
-  { id: 'ideas-100', icon: '💎', title: '100 fikir', threshold: 100, metric: 'ideas', color: '#2563EB' },
-  { id: 'done-10', icon: '✓', title: '10 üretildi', threshold: 10, metric: 'done', color: '#10B981' },
-  { id: 'done-50', icon: '🏅', title: '50 üretildi', threshold: 50, metric: 'done', color: '#059669' },
+  { id: 'fav-5', icon: '⭐', titleKey: BADGE_KEY['fav-5'], threshold: 5, metric: 'fav', color: '#F59E0B' },
+  { id: 'fav-10', icon: '⭐', titleKey: BADGE_KEY['fav-10'], threshold: 10, metric: 'fav', color: '#D97706' },
+  { id: 'fav-50', icon: '�', titleKey: BADGE_KEY['fav-50'], threshold: 50, metric: 'fav', color: '#B45309' },
+  { id: 'streak-3', icon: '🔥', titleKey: BADGE_KEY['streak-3'], threshold: 3, metric: 'streak', color: '#F97316' },
+  { id: 'streak-7', icon: '🔥', titleKey: BADGE_KEY['streak-7'], threshold: 7, metric: 'streak', color: '#EA580C' },
+  { id: 'streak-30', icon: '🏆', titleKey: BADGE_KEY['streak-30'], threshold: 30, metric: 'streak', color: '#C2410C' },
+  { id: 'ideas-50', icon: '💡', titleKey: BADGE_KEY['ideas-50'], threshold: 50, metric: 'ideas', color: '#4D96FF' },
+  { id: 'ideas-100', icon: '💎', titleKey: BADGE_KEY['ideas-100'], threshold: 100, metric: 'ideas', color: '#2563EB' },
+  { id: 'done-10', icon: '✓', titleKey: BADGE_KEY['done-10'], threshold: 10, metric: 'done', color: '#10B981' },
+  { id: 'done-50', icon: '🏅', titleKey: BADGE_KEY['done-50'], threshold: 50, metric: 'done', color: '#059669' },
 ];
 
 const computeEarned = (fav: number, streak: number, ideas: number, done: number): Badge[] =>
@@ -84,9 +116,23 @@ const nextBadge = (fav: number, streak: number, ideas: number, done: number): Ba
   return allNext[0]?.b ?? null;
 };
 
+const LOCALE_MAP: Record<string, string> = {
+  tr: 'tr-TR',
+  en: 'en-US',
+  es: 'es-ES',
+  de: 'de-DE',
+  fr: 'fr-FR',
+};
+
 const formatJoinDate = (ts: number) => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const locale = LOCALE_MAP[i18n.language?.slice(0, 2)] ?? 'en-US';
+  return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' });
+};
+
+const formatNextPlannedDate = (dateStr: string) => {
+  const locale = LOCALE_MAP[i18n.language?.slice(0, 2)] ?? 'en-US';
+  return new Date(dateStr).toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: 'short' });
 };
 
 const daysSince = (ts: number) => {
@@ -95,8 +141,9 @@ const daysSince = (ts: number) => {
 };
 
 export default function ProfileScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
+  const { mode, setMode, isDark } = useTheme();
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [nichesList, setNichesList] = useState<NicheId[]>([]);
   const [showNicheAdd, setShowNicheAdd] = useState(false);
@@ -112,6 +159,7 @@ export default function ProfileScreen() {
   const [planStats, setPlanStats] = useState({ planned: 0, done: 0, upcoming: 0 });
   const [nextPlanned, setNextPlanned] = useState<{ text: string; date: string } | null>(null);
   const [planRefresh, setPlanRefresh] = useState(0);
+  const [toastBadge, setToastBadge] = useState<AchievementBadge | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -154,14 +202,14 @@ export default function ProfileScreen() {
   const nicheColor = nicheData?.color ?? '#4D96FF';
   const nicheIcon = nicheData?.icon ?? '✨';
   const nicheLabel = niche ? t(`niches.${niche}`, niche) : '—';
-  const expMeta = experience ? LEVEL_META[experience] : null;
-  const goalMeta = goal ? GOAL_META[goal] : null;
+  const expMeta = experience ? { ...LEVEL_META[experience], label: t(LEVEL_KEY[experience]) } : null;
+  const goalMeta = goal ? { ...GOAL_META[goal], label: t(GOAL_KEY[goal]) } : null;
 
   const tiles = [
-    { icon: '📅', label: 'Toplam hafta', value: stats?.totalWeeks ?? 0 },
-    { icon: '💡', label: 'Üretilen fikir', value: stats?.totalIdeas ?? 0 },
-    { icon: '⭐', label: 'Favoriler', value: favCount },
-    { icon: '✓', label: 'Üretildi', value: doneCount },
+    { icon: '📅', label: t('profile.tileTotalWeeks'), value: stats?.totalWeeks ?? 0 },
+    { icon: '💡', label: t('profile.tileTotalIdeas'), value: stats?.totalIdeas ?? 0 },
+    { icon: '⭐', label: t('profile.tileFavorites'), value: favCount },
+    { icon: '✓', label: t('profile.tileDone'), value: doneCount },
   ];
 
   const avgPerWeek =
@@ -181,11 +229,11 @@ export default function ProfileScreen() {
       return;
     }
     Alert.alert(
-      'Nişini değiştir',
-      'Aktif nişini değiştirirsen bu haftaki fikirler ve haftalık hedef ilerlemen sıfırlanır. Geçmiş haftalar, favoriler ve üretildi listesi korunur.',
+      t('profile.changeNicheTitle'),
+      t('profile.changeNicheMsg'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Niş Seç', onPress: () => setShowNichePicker(true) },
+        { text: t('profile.changeNicheCancel'), style: 'cancel' },
+        { text: t('profile.changeNichePick'), onPress: () => setShowNichePicker(true) },
       ]
     );
   };
@@ -199,10 +247,16 @@ export default function ProfileScreen() {
     const updated = await getStoredNiches();
     setNichesList(updated);
     Alert.alert(
-      'Aktif niş değişti ✨',
-      'Yeni aktif nişin kaydedildi. Ana sayfaya döndüğünde fikirler yenilenecek.',
-      [{ text: 'Tamam', onPress: () => router.replace('/(tabs)') }]
+      t('profile.alertActiveChangedTitle'),
+      t('profile.alertActiveChangedMsg'),
+      [{ text: t('common.ok'), onPress: () => router.replace('/(tabs)') }]
     );
+  };
+
+  const changeLang = async (lng: SupportedLng) => {
+    await setAppLanguage(lng);
+    const newly = await checkAchievements();
+    if (newly.length > 0) setToastBadge(newly[0]);
   };
 
   const onAddNiche = async (id: string) => {
@@ -215,42 +269,85 @@ export default function ProfileScreen() {
     await addStoredNiche(id as NicheId);
     const updated = await getStoredNiches();
     setNichesList(updated);
-    Alert.alert('Niş eklendi', `${t(`niches.${id}`, id)} artık nişlerin arasında.`);
+    Alert.alert(
+      t('profile.alertNicheAddedTitle'),
+      t('profile.alertNicheAddedMsg', { name: t(`niches.${id}`, id) })
+    );
   };
 
   const onRemoveNiche = (id: string) => {
     if (nichesList.length <= 1) {
-      Alert.alert('En az 1 niş', 'En az bir nişin olmalı. Önce yeni bir niş ekleyebilirsin.');
+      Alert.alert(t('profile.alertRemoveLastTitle'), t('profile.alertRemoveLastMsg'));
       return;
     }
-    Alert.alert('Nişi kaldır', `${t(`niches.${id}`, id)} nişini kaldırmak istediğine emin misin?`, [
-      { text: 'Vazgeç', style: 'cancel' },
-      {
-        text: 'Kaldır',
-        style: 'destructive',
-        onPress: async () => {
-          await removeStoredNiche(id as NicheId);
-          const updated = await getStoredNiches();
-          setNichesList(updated);
-          if (id === niche) {
-            setNiche(updated[0] ?? null);
-            await clearWeeklyGoalProgress();
-          }
+    Alert.alert(
+      t('profile.alertRemoveTitle'),
+      t('profile.alertRemoveMsg', { name: t(`niches.${id}`, id) }),
+      [
+        { text: t('profile.alertRemoveCancel'), style: 'cancel' },
+        {
+          text: t('profile.alertRemoveConfirm'),
+          style: 'destructive',
+          onPress: async () => {
+            await removeStoredNiche(id as NicheId);
+            const updated = await getStoredNiches();
+            setNichesList(updated);
+            if (id === niche) {
+              setNiche(updated[0] ?? null);
+              await clearWeeklyGoalProgress();
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <View style={{ flex: 1, backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }}>
+      <BadgeToast badge={toastBadge} onDismiss={() => setToastBadge(null)} />
+      <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+        <PageHint hintId="profile" title={t('pageHints.profile.title')} description={t('pageHints.profile.desc')} />
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>Profil</Text>
+            <Text style={styles.title}>{t('profile.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>Senin içerik koçun</Text>
+          <Text style={styles.subtitle}>{t('profile.subtitle')}</Text>
         </View>
+      </View>
+
+      <Text style={styles.section}>🌍 {t('settings.language')}</Text>
+      <View style={styles.langGrid}>
+        {SUPPORTED_LANGUAGES.map((lng) => {
+          const isActive = i18n.language === lng.code;
+          return (
+            <Pressable
+              key={lng.code}
+              onPress={() => changeLang(lng.code)}
+              style={[styles.langChip, isActive && styles.langChipActive]}
+            >
+              <Text style={[styles.langChipText, isActive && styles.langChipTextActive]}>
+                {lng.flag} {lng.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.section}>🌙 {t('settings.theme')}</Text>
+      <View style={styles.row}>
+        {(['light', 'dark', 'system'] as const).map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => setMode(m)}
+            style={[styles.themeChip, mode === m && styles.themeChipActive]}
+          >
+            <Text style={[styles.themeChipText, mode === m && styles.themeChipTextActive]}>
+              {m === 'light' ? t('settings.themeLight') : m === 'dark' ? t('settings.themeDark') : t('settings.themeSystem')}
+            </Text>
+          </Pressable>
+        ))}
       </View>
 
       <View style={[styles.identityCard, { borderColor: nicheColor }]}>
@@ -259,24 +356,24 @@ export default function ProfileScreen() {
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.identityLabel}>İçerik Üreticisi</Text>
+          <Text style={styles.identityLabel}>{t('profile.identityLabel')}</Text>
           <Text style={styles.identityTitle}>{nicheLabel}</Text>
           <View style={styles.identityMeta}>
-            <Text style={styles.identityMetaText}>📅 {joinedAt ? formatJoinDate(joinedAt) : '—'}</Text>
-            <Text style={styles.identityMetaText}>· {memberDays} gündür bizimle</Text>
+            <Text style={styles.identityMetaText}>� {joinedAt ? formatJoinDate(joinedAt) : '—'}</Text>
+            <Text style={styles.identityMetaText}>· {memberDays} {t('profile.memberDays')}</Text>
           </View>
         </View>
         <Pressable onPress={onChangeNiche} style={[styles.identityEdit, { backgroundColor: nicheColor }]}>
-          <Text style={styles.identityEditText}>Değiştir</Text>
+          <Text style={styles.identityEditText}>{t('profile.changeNiche')}</Text>
         </Pressable>
       </View>
 
       {nichesList.length > 0 && (
         <View style={styles.nichesPanel}>
           <View style={styles.nichesPanelHeader}>
-            <Text style={styles.nichesPanelTitle}>Nişlerin ({nichesList.length})</Text>
+            <Text style={styles.nichesPanelTitle}>{t('profile.nichesPanel', { count: nichesList.length })}</Text>
             <Pressable onPress={() => setShowNicheAdd(true)} style={styles.nichesAddBtn}>
-              <Text style={styles.nichesAddBtnText}>+ Ekle</Text>
+              <Text style={styles.nichesAddBtnText}>{t('profile.nichesAdd')}</Text>
             </Pressable>
           </View>
           <View style={styles.nichesChipRow}>
@@ -301,48 +398,48 @@ export default function ProfileScreen() {
                     <Text style={[styles.nicheChipLabel, isActive && { color: n?.color, fontWeight: '800' }]}>
                       {t(`niches.${id}`, id)}
                     </Text>
-                    {isActive && <Text style={[styles.nicheChipBadge, { color: n?.color }]}>AKTİF</Text>}
+                    {isActive && <Text style={[styles.nicheChipBadge, { color: n?.color }]}>{t('profile.active')}</Text>}
                   </Pressable>
                 </View>
               );
             })}
           </View>
-          <Text style={styles.nichesHint}>💡 Aktif nişi değiştirmek için tıkla · kaldırmak için basılı tut</Text>
+          <Text style={styles.nichesHint}>{t('profile.nichesHint')}</Text>
         </View>
       )}
 
       <View style={styles.gridWrap}>
-        {tiles.map((t, i) => (
+        {tiles.map((tile, i) => (
           <View key={i} style={styles.tile}>
-            <Text style={styles.tileIcon}>{t.icon}</Text>
-            <Text style={styles.tileValue}>{t.value}</Text>
-            <Text style={styles.tileLabel}>{t.label}</Text>
+            <Text style={styles.tileIcon}>{tile.icon}</Text>
+            <Text style={styles.tileValue}>{tile.value}</Text>
+            <Text style={styles.tileLabel}>{tile.label}</Text>
           </View>
         ))}
       </View>
 
-      <Text style={styles.section}>Kişisel rekorlar</Text>
+      <Text style={styles.section}>{t('profile.sectionRecords')}</Text>
       <View style={styles.recordRow}>
         <View style={[styles.recordCard, styles.recordBest]}>
           <Text style={styles.recordIcon}>🏆</Text>
-          <Text style={styles.recordLabel}>En uzun streak</Text>
-          <Text style={styles.recordValue}>{streakBest} <Text style={styles.recordUnit}>gün</Text></Text>
+          <Text style={styles.recordLabel}>{t('profile.recordBestStreak')}</Text>
+          <Text style={styles.recordValue}>{streakBest} <Text style={styles.recordUnit}>{t('profile.dayUnit')}</Text></Text>
         </View>
         <View style={styles.recordCard}>
           <Text style={styles.recordIcon}>📊</Text>
-          <Text style={styles.recordLabel}>Ortalama fikir/hafta</Text>
+          <Text style={styles.recordLabel}>{t('profile.recordAvgPerWeek')}</Text>
           <Text style={styles.recordValue}>{avgPerWeek}</Text>
         </View>
         <View style={styles.recordCard}>
           <Text style={styles.recordIcon}>🎯</Text>
-          <Text style={styles.recordLabel}>Tutarlılık</Text>
+          <Text style={styles.recordLabel}>{t('profile.recordConsistency')}</Text>
           <Text style={styles.recordValue}>{consistency}<Text style={styles.recordUnit}>%</Text></Text>
         </View>
       </View>
 
-      <Text style={styles.section}>Rozetler ({earned.length}/{BADGES.length})</Text>
+      <Text style={styles.section}>{t('profile.sectionBadges', { earned: earned.length, total: BADGES.length })}</Text>
       {earned.length === 0 && !next && (
-        <Text style={styles.badgeEmpty}>Favori ekleyip fikir üreterek ilk rozetinizi kazanın.</Text>
+        <Text style={styles.badgeEmpty}>{t('profile.badgeEmpty')}</Text>
       )}
       <View style={styles.badgeRow}>
         {BADGES.map((b) => {
@@ -361,7 +458,7 @@ export default function ProfileScreen() {
             >
               <Text style={styles.badgeIcon}>{isEarned ? b.icon : '🔒'}</Text>
               <Text style={[styles.badgeText, { color: isEarned ? b.color : '#9CA3AF' }]}>
-                {b.title}
+                {t(b.titleKey)}
               </Text>
             </View>
           );
@@ -369,16 +466,16 @@ export default function ProfileScreen() {
       </View>
       {next && (
         <View style={styles.nextBadgeBox}>
-          <Text style={styles.nextBadgeLabel}>Sıradaki rozet</Text>
+          <Text style={styles.nextBadgeLabel}>{t('profile.nextBadge')}</Text>
           <View style={styles.nextBadgeRow}>
             <Text style={styles.nextBadgeIcon}>{next.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.nextBadgeTitle}>{next.title}</Text>
+              <Text style={styles.nextBadgeTitle}>{t(next.titleKey)}</Text>
               <Text style={styles.nextBadgeSub}>
-                {next.metric === 'fav' && `${Math.max(0, next.threshold - favCount)} favori daha`}
-                {next.metric === 'streak' && `${Math.max(0, next.threshold - streak)} gün daha üret`}
-                {next.metric === 'ideas' && `${Math.max(0, next.threshold - (stats?.totalIdeas ?? 0))} fikir daha üret`}
-                {next.metric === 'done' && `${Math.max(0, next.threshold - doneCount)} fikir daha üretildi olarak işaretle`}
+                {next.metric === 'fav' && t('profile.nextBadgeMoreFav', { count: Math.max(0, next.threshold - favCount) })}
+                {next.metric === 'streak' && t('profile.nextBadgeMoreStreak', { count: Math.max(0, next.threshold - streak) })}
+                {next.metric === 'ideas' && t('profile.nextBadgeMoreIdeas', { count: Math.max(0, next.threshold - (stats?.totalIdeas ?? 0)) })}
+                {next.metric === 'done' && t('profile.nextBadgeMoreDone', { count: Math.max(0, next.threshold - doneCount) })}
               </Text>
             </View>
           </View>
@@ -387,29 +484,27 @@ export default function ProfileScreen() {
 
       {planStats.planned > 0 && (
         <>
-          <Text style={styles.section}>📅 Takvim Özeti</Text>
+          <Text style={styles.section}>{t('profile.sectionCalendar')}</Text>
           <View style={styles.calendarCard}>
             <View style={styles.calendarRow}>
               <View style={styles.calendarStat}>
                 <Text style={styles.calendarStatValue}>{planStats.planned}</Text>
-                <Text style={styles.calendarStatLabel}>Planlı</Text>
+                <Text style={styles.calendarStatLabel}>{t('profile.calPlanned')}</Text>
               </View>
               <View style={styles.calendarStat}>
                 <Text style={[styles.calendarStatValue, { color: '#10B981' }]}>{planStats.done}</Text>
-                <Text style={styles.calendarStatLabel}>Üretildi</Text>
+                <Text style={styles.calendarStatLabel}>{t('profile.calDone')}</Text>
               </View>
               <View style={styles.calendarStat}>
                 <Text style={[styles.calendarStatValue, { color: '#4D96FF' }]}>{planStats.upcoming}</Text>
-                <Text style={styles.calendarStatLabel}>Sıradaki</Text>
+                <Text style={styles.calendarStatLabel}>{t('profile.calUpcoming')}</Text>
               </View>
             </View>
             {nextPlanned && (
               <View style={styles.nextPlannedBox}>
-                <Text style={styles.nextPlannedLabel}>⏭ Sıradaki fikir</Text>
+                <Text style={styles.nextPlannedLabel}>{t('profile.calNextLabel')}</Text>
                 <Text style={styles.nextPlannedText} numberOfLines={2}>{nextPlanned.text}</Text>
-                <Text style={styles.nextPlannedDate}>
-                  {new Date(nextPlanned.date).toLocaleDateString('tr-TR', { weekday: 'long', day: '2-digit', month: 'short' })}
-                </Text>
+                <Text style={styles.nextPlannedDate}>{formatNextPlannedDate(nextPlanned.date)}</Text>
               </View>
             )}
             <View style={styles.calendarProgressBg}>
@@ -421,10 +516,10 @@ export default function ProfileScreen() {
               />
             </View>
             <Text style={styles.calendarProgressLabel}>
-              Tamamlama oranı: {planStats.planned > 0 ? Math.round((planStats.done / planStats.planned) * 100) : 0}%
+              {t('profile.calCompletionRate', { pct: planStats.planned > 0 ? Math.round((planStats.done / planStats.planned) * 100) : 0 })}
             </Text>
             <Pressable onPress={() => router.push('/(tabs)/calendar')} style={styles.calendarOpenBtn}>
-              <Text style={styles.calendarOpenBtnText}>Takvimi aç →</Text>
+              <Text style={styles.calendarOpenBtnText}>{t('profile.calOpenBtn')}</Text>
             </Pressable>
           </View>
         </>
@@ -432,9 +527,9 @@ export default function ProfileScreen() {
 
       <Pressable onPress={() => router.push('/comments')} style={styles.commentsCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.commentsTitle}>💬 Yorum Şablonları</Text>
+          <Text style={styles.commentsTitle}>{t('profile.commentsTitle')}</Text>
           <Text style={styles.commentsSub}>
-            Sık kullandığın yorumları kaydet, tek tıkla kopyala
+            {t('profile.commentsSub')}
           </Text>
         </View>
         <Text style={styles.commentsArrow}>›</Text>
@@ -442,9 +537,9 @@ export default function ProfileScreen() {
 
       <Pressable onPress={() => router.push('/collections')} style={styles.collectionsCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.collectionsTitle}>📚 Fikir Paketleri</Text>
+          <Text style={styles.collectionsTitle}>{t('profile.collectionsTitle')}</Text>
           <Text style={styles.collectionsSub}>
-            Fikirlerini kendi koleksiyonlarına grupla
+            {t('profile.collectionsSub')}
           </Text>
         </View>
         <Text style={styles.commentsArrow}>›</Text>
@@ -452,53 +547,55 @@ export default function ProfileScreen() {
 
       <Pressable onPress={() => router.push('/hashtags')} style={styles.hashtagCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.hashtagTitle}># Hashtag Üretici</Text>
+          <Text style={styles.hashtagTitle}>{t('profile.hashtagTitle')}</Text>
           <Text style={styles.hashtagSub}>
-            Fikrin için 15 hashtag önerisi, seç-kopyala
+            {t('profile.hashtagSub')}
           </Text>
         </View>
         <Text style={styles.commentsArrow}>›</Text>
       </Pressable>
 
-      <Text style={styles.section}>Yolculuğun</Text>
+      <BadgeGrid />
+
+      <Text style={styles.section}>{t('profile.sectionJourney')}</Text>
       <View style={styles.row}>
         <View style={[styles.cardLeft, { borderLeftColor: expMeta?.color ?? '#E5E7EB' }]}>
-          <Text style={styles.cardLabel}>Deneyim</Text>
+          <Text style={styles.cardLabel}>{t('profile.experience')}</Text>
           {expMeta ? (
             <View style={styles.cardRow}>
               <Text style={styles.cardIcon}>{expMeta.icon}</Text>
               <Text style={[styles.cardTitle, { color: expMeta.color }]}>{expMeta.label}</Text>
             </View>
           ) : (
-            <Text style={styles.cardEmpty}>Henüz seçilmedi</Text>
+            <Text style={styles.cardEmpty}>{t('profile.notSelected')}</Text>
           )}
         </View>
         <View style={[styles.cardLeft, { borderLeftColor: goalMeta?.color ?? '#E5E7EB' }]}>
-          <Text style={styles.cardLabel}>Hedef</Text>
+          <Text style={styles.cardLabel}>{t('profile.goal')}</Text>
           {goalMeta ? (
             <View style={styles.cardRow}>
               <Text style={styles.cardIcon}>{goalMeta.icon}</Text>
               <Text style={[styles.cardTitle, { color: goalMeta.color }]}>{goalMeta.label}</Text>
             </View>
           ) : (
-            <Text style={styles.cardEmpty}>Henüz seçilmedi</Text>
+            <Text style={styles.cardEmpty}>{t('profile.notSelected')}</Text>
           )}
         </View>
       </View>
 
       {stats && stats.lastWeekId && (
         <View style={styles.lastWeek}>
-          <Text style={styles.lastWeekLabel}>Son aktif hafta</Text>
+          <Text style={styles.lastWeekLabel}>{t('profile.lastActiveWeek')}</Text>
           <Text style={styles.lastWeekValue}>{stats.lastWeekId}</Text>
         </View>
       )}
 
       <View style={styles.actions}>
         <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/(tabs)/stats')}>
-          <Text style={styles.btnAltText}>İstatistikleri gör</Text>
+          <Text style={styles.btnAltText}>{t('profile.btnStats')}</Text>
         </Pressable>
         <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/(tabs)/settings')}>
-          <Text style={styles.btnAltText}>Ayarları aç</Text>
+          <Text style={styles.btnAltText}>{t('profile.btnSettings')}</Text>
         </Pressable>
       </View>
 
@@ -506,7 +603,7 @@ export default function ProfileScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Aktif nişini seç</Text>
+              <Text style={styles.modalTitle}>{t('profile.modalSelectNiche')}</Text>
               <Pressable onPress={() => setShowNichePicker(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </Pressable>
@@ -526,8 +623,8 @@ export default function ProfileScreen() {
                   >
                     <Text style={styles.modalIcon}>{n.icon}</Text>
                     <Text style={styles.modalLabel}>{t(`niches.${n.id}`, n.id)}</Text>
-                    {isSel && <Text style={[styles.modalCheck, { color: n.color }]}>✓ Aktif</Text>}
-                    {!inList && <Text style={styles.modalHint}>Ekle + aktif yap</Text>}
+                    {isSel && <Text style={[styles.modalCheck, { color: n.color }]}>{t('profile.modalActive')}</Text>}
+                    {!inList && <Text style={styles.modalHint}>{t('profile.modalAddActive')}</Text>}
                   </Pressable>
                 );
               })}
@@ -540,7 +637,7 @@ export default function ProfileScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Yeni niş ekle</Text>
+              <Text style={styles.modalTitle}>{t('profile.modalAddNiche')}</Text>
               <Pressable onPress={() => setShowNicheAdd(false)} style={styles.modalClose}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </Pressable>
@@ -559,23 +656,37 @@ export default function ProfileScreen() {
                   >
                     <Text style={styles.modalIcon}>{n.icon}</Text>
                     <Text style={styles.modalLabel}>{t(`niches.${n.id}`, n.id)}</Text>
-                    <Text style={[styles.modalCheck, { color: n.color }]}>+ Ekle</Text>
+                    <Text style={[styles.modalCheck, { color: n.color }]}>{t('profile.modalAdd')}</Text>
                   </Pressable>
                 ))}
               {(niches as Niche[]).filter((n) => !nichesList.includes(n.id as NicheId)).length === 0 && (
-                <Text style={styles.modalEmptyText}>Tüm nişleri zaten ekledin 🎉</Text>
+                <Text style={styles.modalEmptyText}>{t('profile.modalAllAdded')}</Text>
               )}
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#5C6B4F' },
   headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 50, marginBottom: 16 },
+  langGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  langChip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  langChipActive: { backgroundColor: '#4D96FF', borderColor: '#4D96FF' },
+  langChipText: { fontWeight: '700', color: '#111827', fontSize: 13 },
+  langChipTextActive: { color: 'white' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', marginTop: 4 },
   identityCard: {
@@ -640,6 +751,18 @@ const styles = StyleSheet.create({
   recordValue: { fontSize: 22, fontWeight: '800', color: '#111827', marginTop: 2 },
   recordUnit: { fontSize: 12, color: '#6B7280', fontWeight: '600' },
   row: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  themeChip: {
+    flex: 1,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  themeChipActive: { backgroundColor: '#4D96FF', borderColor: '#4D96FF' },
+  themeChipText: { fontWeight: '700', color: '#111827', fontSize: 13 },
+  themeChipTextActive: { color: 'white' },
   cardLeft: {
     flex: 1,
     backgroundColor: 'white',

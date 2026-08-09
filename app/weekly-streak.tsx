@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   WeeklyStreakData,
   WeeklyStreakDay,
@@ -16,16 +18,14 @@ import {
   getWeeklyStreakData,
 } from '../services/storage';
 
-const MONTH_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-
-const formatRange = (ws: string, we: string): string => {
+const formatRange = (ws: string, we: string, months: string[]): string => {
   const a = new Date(ws);
   const b = new Date(we);
   const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
   if (sameMonth) {
-    return `${a.getDate()}-${b.getDate()} ${MONTH_TR[a.getMonth()]}`;
+    return `${a.getDate()}-${b.getDate()} ${months[a.getMonth()]}`;
   }
-  return `${a.getDate()} ${MONTH_TR[a.getMonth()]} - ${b.getDate()} ${MONTH_TR[b.getMonth()]}`;
+  return `${a.getDate()} ${months[a.getMonth()]} - ${b.getDate()} ${months[b.getMonth()]}`;
 };
 
 const dayFill = (day: WeeklyStreakDay): string => {
@@ -48,9 +48,16 @@ const dayTextColor = (day: WeeklyStreakDay): string => {
 export default function WeeklyStreakScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [data, setData] = useState<WeeklyStreakData | null>(null);
   const [viewIdx, setViewIdx] = useState<number | null>(null);
   const [selectedDay, setSelectedDay] = useState<WeeklyStreakDay | null>(null);
+
+  const MONTH_LABELS = (t('weeklyStreak.month', { returnObjects: true }) as string[]) || [];
+  const LOCALE_TAG = (() => {
+    const l = (i18n.language || 'en').split('-')[0];
+    return l === 'tr' ? 'tr-TR' : l === 'es' ? 'es-ES' : l === 'de' ? 'de-DE' : l === 'fr' ? 'fr-FR' : 'en-US';
+  })();
 
   const load = useCallback(async () => {
     const d = await getWeeklyStreakData(8);
@@ -88,7 +95,7 @@ export default function WeeklyStreakScreen() {
       ]}
     >
       <View style={styles.weekRowLabelCol}>
-        <Text style={styles.weekRowRange}>{formatRange(w.startDate, w.endDate)}</Text>
+        <Text style={styles.weekRowRange}>{formatRange(w.startDate, w.endDate, MONTH_LABELS)}</Text>
         <Text style={styles.weekRowMeta}>
           {w.activeDays}/7 gün • {w.doneTotal} içerik
         </Text>
@@ -119,7 +126,7 @@ export default function WeeklyStreakScreen() {
     <View style={{ flex: 1, backgroundColor: '#FAFAFB' }}>
       <Stack.Screen
         options={{
-          title: '🔥 Haftalık Streak',
+          title: t('weeklyStreak.title'),
           headerStyle: { backgroundColor: '#FAFAFB' },
           headerTitleStyle: { color: '#111827', fontWeight: '700' },
           headerShadowVisible: false,
@@ -135,15 +142,15 @@ export default function WeeklyStreakScreen() {
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.heroEyebrow}>Bu hafta</Text>
-              <Text style={styles.heroTitle}>{week.doneTotal} içerik ürettin</Text>
+              <Text style={styles.heroEyebrow}>{t('weeklyStreak.thisWeek')}</Text>
+              <Text style={styles.heroTitle}>{t('weeklyStreak.thisWeekContent', { count: week.doneTotal })}</Text>
               <Text style={styles.heroSub}>
-                {formatRange(week.startDate, week.endDate)} •{' '}
-                {week.activeDays}/7 aktif gün
+                {formatRange(week.startDate, week.endDate, MONTH_LABELS)} •{' '}
+                {t('weeklyStreak.thisWeekDays', { count: week.activeDays })}
               </Text>
             </View>
             <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>{data.weeklyGoal}/hafta</Text>
+              <Text style={styles.heroBadgeText}>{t('weeklyStreak.weeklyRate', { count: data.weeklyGoal })}</Text>
             </View>
           </View>
 
@@ -158,7 +165,9 @@ export default function WeeklyStreakScreen() {
           </View>
           <View style={styles.goalBarMeta}>
             <Text style={styles.goalBarText}>
-              Hedef: {data.weeklyGoal} • {week.goalAchieved ? '✅ Tamam' : `${Math.max(0, data.weeklyGoal - week.doneTotal)} kaldı`}
+              {week.goalAchieved
+                ? t('weeklyStreak.goalComplete', { target: data.weeklyGoal })
+                : t('weeklyStreak.goalRemaining', { count: Math.max(0, data.weeklyGoal - week.doneTotal) })}
             </Text>
             <Text style={styles.goalBarPct}>{Math.round(goalRate * 100)}%</Text>
           </View>
@@ -193,7 +202,7 @@ export default function WeeklyStreakScreen() {
         {selectedDay && (
           <View style={styles.detailCard}>
             <Text style={styles.detailTitle}>
-              {new Date(selectedDay.date).toLocaleDateString('tr-TR', {
+              {new Date(selectedDay.date).toLocaleDateString(LOCALE_TAG, {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -201,19 +210,23 @@ export default function WeeklyStreakScreen() {
             </Text>
             <View style={styles.detailRow}>
               <View style={styles.detailItem}>
-                <Text style={styles.detailItemLabel}>Planlanan</Text>
+                <Text style={styles.detailItemLabel}>{t('weeklyStreak.colPlanned')}</Text>
                 <Text style={styles.detailItemVal}>{selectedDay.planned}</Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailItemLabel}>Üretilen</Text>
+                <Text style={styles.detailItemLabel}>{t('weeklyStreak.colDone')}</Text>
                 <Text style={[styles.detailItemVal, { color: '#22C55E' }]}>
                   {selectedDay.done}
                 </Text>
               </View>
               <View style={styles.detailItem}>
-                <Text style={styles.detailItemLabel}>Durum</Text>
+                <Text style={styles.detailItemLabel}>{t('weeklyStreak.colStatus')}</Text>
                 <Text style={styles.detailItemVal}>
-                  {selectedDay.isFuture ? 'Gelecek' : selectedDay.hasActivity ? 'Aktif' : 'Boş'}
+                  {selectedDay.isFuture
+                    ? t('weeklyStreak.statusUpcoming')
+                    : selectedDay.hasActivity
+                    ? t('weeklyStreak.statusActive')
+                    : t('weeklyStreak.statusEmpty')}
                 </Text>
               </View>
             </View>
@@ -223,36 +236,36 @@ export default function WeeklyStreakScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>🔥 {data.currentWeekDone}</Text>
-            <Text style={styles.statLabel}>Bu hafta</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statThisWeek')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>🏆 {data.bestWeekDone}</Text>
-            <Text style={styles.statLabel}>En iyi hafta</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statBestWeek')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>⭐ {data.achievedWeeks}</Text>
-            <Text style={styles.statLabel}>Hedef tutan</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statOnGoal')}</Text>
           </View>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>💎 {data.perfectWeeks}</Text>
-            <Text style={styles.statLabel}>Mükemmel</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statPerfect')}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statVal}>📊 {Math.round(overallCompletion * 100)}%</Text>
-            <Text style={styles.statLabel}>Toplam doluluk</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statFillRate')}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statVal}>📅 {data.totalDone}</Text>
-            <Text style={styles.statLabel}>Toplam içerik</Text>
+            <Text style={styles.statVal}>� {data.totalDone}</Text>
+            <Text style={styles.statLabel}>{t('weeklyStreak.statTotal')}</Text>
           </View>
         </View>
 
         <View style={styles.timelineCard}>
           <View style={styles.timelineHeader}>
-            <Text style={styles.timelineTitle}>Son 9 hafta</Text>
+            <Text style={styles.timelineTitle}>{t('weeklyStreak.last9')}</Text>
             <View style={styles.timelineNav}>
               <Pressable
                 onPress={() => setViewIdx((cur) => Math.max(0, (cur ?? idx) - 1))}
@@ -276,20 +289,20 @@ export default function WeeklyStreakScreen() {
         </View>
 
         <View style={styles.legendCard}>
-          <Text style={styles.legendTitle}>Renk skalası</Text>
+          <Text style={styles.legendTitle}>{t('weeklyStreak.scaleTitle')}</Text>
           <View style={styles.legendRow}>
             <View style={[styles.legendBox, { backgroundColor: '#F3F4F6' }]} />
-            <Text style={styles.legendText}>Boş</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleEmpty')}</Text>
             <View style={[styles.legendBox, { backgroundColor: '#DCFCE7' }]} />
-            <Text style={styles.legendText}>Az</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleLow')}</Text>
             <View style={[styles.legendBox, { backgroundColor: '#86EFAC' }]} />
-            <Text style={styles.legendText}>Orta</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleMid')}</Text>
             <View style={[styles.legendBox, { backgroundColor: '#22C55E' }]} />
-            <Text style={styles.legendText}>Çok</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleHigh')}</Text>
             <View style={[styles.legendBox, { backgroundColor: '#15803D' }]} />
-            <Text style={styles.legendText}>Yoğun</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleMax')}</Text>
             <View style={[styles.legendBox, { backgroundColor: '#7c5cff' }]} />
-            <Text style={styles.legendText}>Bugün</Text>
+            <Text style={styles.legendText}>{t('weeklyStreak.scaleToday')}</Text>
           </View>
         </View>
 
@@ -297,7 +310,7 @@ export default function WeeklyStreakScreen() {
           onPress={() => router.push('/weekly-planner')}
           style={styles.ctaBtn}
         >
-          <Text style={styles.ctaText}>📅 Haftalık Planlayıcıyı Aç</Text>
+          <Text style={styles.ctaText}>{t('weeklyStreak.openPlanner')}</Text>
         </Pressable>
       </ScrollView>
     </View>

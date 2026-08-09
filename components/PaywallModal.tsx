@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { MonthlyUsage, getUserPlan } from '../services/storage';
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export default function PaywallModal({ visible, onClose, usage, reason, nicheName }: Props) {
+  const { t } = useTranslation();
   const router = useRouter();
   const [isPro, setIsPro] = useState(false);
 
@@ -27,12 +29,17 @@ export default function PaywallModal({ visible, onClose, usage, reason, nicheNam
   };
 
   const title = reason === 'idea_limit'
-    ? 'Bu ay 20 fikir limitine ulaştın'
-    : 'Tüm 8 niş Pro ile açılır';
+    ? t('paywall.ideaLimitTitle')
+    : t('paywall.nicheLimitTitle');
 
   const sub = reason === 'idea_limit'
-    ? `Bu ay ${usage?.count ?? 20}/${usage?.limit ?? 20} fikir kullandın. Pro ile sınırsız fikir üret, AI özelliklerini aç.`
-    : `Free planda en fazla 3 niş seçebilirsin${nicheName ? ` ("${nicheName}" dahil)` : ''}. Pro ile tüm 8 nişe eriş, ayda sınırsız fikir üret.`;
+    ? t('paywall.ideaLimitSub', {
+        count: usage?.count ?? 20,
+        limit: usage?.limit ?? 20,
+      })
+    : t('paywall.nicheLimitSub', {
+        nameSuffix: nicheName ? t('paywall.nicheSuffix', { name: nicheName }) : '',
+      });
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -43,24 +50,24 @@ export default function PaywallModal({ visible, onClose, usage, reason, nicheNam
           <Text style={styles.sub}>{sub}</Text>
 
           <View style={styles.bullets}>
-            <Text style={styles.bullet}>✓ Sınırsız fikir</Text>
-            <Text style={styles.bullet}>✓ Tüm 8 niş</Text>
-            <Text style={styles.bullet}>✓ AI özellikler açık</Text>
-            <Text style={styles.bullet}>✓ Reklamsız</Text>
+            <Text style={styles.bullet}>{t('paywall.bulletUnlimited')}</Text>
+            <Text style={styles.bullet}>{t('paywall.bulletAllNiches')}</Text>
+            <Text style={styles.bullet}>{t('paywall.bulletAI')}</Text>
+            <Text style={styles.bullet}>{t('paywall.bulletNoAds')}</Text>
           </View>
 
           {!isPro ? (
             <View style={styles.actions}>
               <Pressable onPress={onClose} style={[styles.btn, styles.btnGhost]}>
-                <Text style={[styles.btnText, { color: '#374151' }]}>Daha Sonra</Text>
+                <Text style={[styles.btnText, { color: '#374151' }]}>{t('paywall.later')}</Text>
               </Pressable>
               <Pressable onPress={goPricing} style={[styles.btn, styles.btnPrimary]}>
-                <Text style={[styles.btnText, { color: '#FFFFFF' }]}>Pro'ya Geç ›</Text>
+                <Text style={[styles.btnText, { color: '#FFFFFF' }]}>{t('paywall.goPro')}</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable onPress={onClose} style={[styles.btn, styles.btnPrimary]}>
-              <Text style={[styles.btnText, { color: '#FFFFFF' }]}>Tamam</Text>
+              <Text style={[styles.btnText, { color: '#FFFFFF' }]}>{t('common.ok')}</Text>
             </Pressable>
           )}
         </View>

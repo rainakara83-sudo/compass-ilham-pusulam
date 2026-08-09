@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Clipboard, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
+import i18n from '../../i18n';
 import {
   FavoriteEntry,
   getFavoritesDetailed,
@@ -11,11 +13,17 @@ import PlanBadge from '../../components/PlanBadge';
 
 const formatDate = (ts: number) => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  try {
+    return d.toLocaleDateString(lng, { day: '2-digit', month: 'short' });
+  } catch {
+    return d.toLocaleDateString('en', { day: '2-digit', month: 'short' });
+  }
 };
 
 export default function FavoritesScreen() {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const router = useRouter();
   const [items, setItems] = useState<FavoriteEntry[]>([]);
   const [query, setQuery] = useState('');
@@ -47,24 +55,24 @@ export default function FavoritesScreen() {
     const message = selectedTexts.join('\n• ');
     try {
       await Share.share({
-        message: `⭐ Favorilerim:\n\n• ${message}`,
-        title: 'Favoriler',
+        message: t('favorites.shareBody', { message }),
+        title: t('favorites.shareTitle'),
       });
     } catch {
       Clipboard.setString(selectedTexts.join('\n'));
-      Alert.alert('Kopyalandı', 'Favoriler panoya aktarıldı.');
+      Alert.alert(t('favorites.copiedTitle'), t('favorites.copiedMsg'));
     }
   };
 
   const onBulkDelete = () => {
     if (selected.size === 0) return;
     Alert.alert(
-      `${selected.size} favoriyi sil`,
-      'Seçili favoriler kaldırılacak. Emin misin?',
+      t('favorites.bulkDeleteTitle', { count: selected.size }),
+      t('favorites.bulkDeleteMsg'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Sil',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             const next = await removeManyFavorites(Array.from(selected));
@@ -78,10 +86,10 @@ export default function FavoritesScreen() {
   };
 
   const onRemoveOne = (text: string) => {
-    Alert.alert('Favoriden kaldır', 'Bu fikir favorilerden çıkarılsın mı?', [
+    Alert.alert(t('favorites.removeOneTitle'), t('favorites.removeOneMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Kaldır',
+        text: t('favorites.removeBtn'),
         style: 'destructive',
         onPress: async () => {
           const next = await removeManyFavorites([text]);
@@ -116,14 +124,14 @@ export default function FavoritesScreen() {
   const visible = q ? items.filter((i) => i.text.toLowerCase().includes(q)) : items;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>⭐ Favoriler</Text>
+            <Text style={styles.title}>⭐ {t('favorites.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>{items.length} kayıtlı fikir</Text>
+          <Text style={styles.subtitle}>{t('favorites.subtitle', { count: items.length })}</Text>
         </View>
         {items.length > 0 && (
           <Pressable
@@ -131,7 +139,7 @@ export default function FavoritesScreen() {
             style={[styles.selectToggle, selectMode && styles.selectToggleOn]}
           >
             <Text style={[styles.selectToggleText, selectMode && styles.selectToggleTextOn]}>
-              {selectMode ? '✕ Vazgeç' : '☑ Seç'}
+              {selectMode ? t('favorites.cancelSelect') : t('favorites.startSelect')}
             </Text>
           </Pressable>
         )}
@@ -141,7 +149,7 @@ export default function FavoritesScreen() {
         <View style={styles.searchRow}>
           <TextInput
             style={styles.search}
-            placeholder="Favorilerde ara..."
+            placeholder={t('favorites.searchPlaceholder')}
             value={query}
             onChangeText={setQuery}
             placeholderTextColor="#9CA3AF"
@@ -156,19 +164,21 @@ export default function FavoritesScreen() {
 
       {q.length > 0 && (
         <Text style={styles.matchInfo}>
-          {visible.length === 0 ? 'Eşleşme yok' : `${visible.length} fikirde eşleşti`}
+          {visible.length === 0
+            ? t('favorites.noMatch')
+            : t('favorites.matchCount', { count: visible.length })}
         </Text>
       )}
 
       {selectMode && (
         <View style={styles.bulkBar}>
-          <Text style={styles.bulkBarText}>{selected.size} seçili</Text>
+          <Text style={styles.bulkBarText}>{t('favorites.selectedCount', { count: selected.size })}</Text>
           <View style={{ flex: 1 }} />
           <Pressable onPress={onCopyAll} disabled={selected.size === 0} style={[styles.bulkBtn, selected.size === 0 && styles.bulkBtnDisabled]}>
-            <Text style={[styles.bulkBtnText, selected.size === 0 && styles.bulkBtnTextDisabled]}>↗ Paylaş</Text>
+            <Text style={[styles.bulkBtnText, selected.size === 0 && styles.bulkBtnTextDisabled]}>↗ {t('favorites.share')}</Text>
           </Pressable>
           <Pressable onPress={onBulkDelete} disabled={selected.size === 0} style={[styles.bulkBtn, styles.bulkBtnDanger, selected.size === 0 && styles.bulkBtnDisabled]}>
-            <Text style={[styles.bulkBtnText, styles.bulkBtnDangerText, selected.size === 0 && styles.bulkBtnTextDisabled]}>🗑 Sil</Text>
+            <Text style={[styles.bulkBtnText, styles.bulkBtnDangerText, selected.size === 0 && styles.bulkBtnTextDisabled]}>🗑 {t('common.delete')}</Text>
           </Pressable>
         </View>
       )}
@@ -176,15 +186,15 @@ export default function FavoritesScreen() {
       {items.length === 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>💭</Text>
-          <Text style={styles.emptyText}>Henüz favori fikir yok.</Text>
-          <Text style={styles.emptyHint}>Ana sayfada yıldız ikonuna dokunarak fikirleri kaydedebilirsin.</Text>
+          <Text style={styles.emptyText}>{t('favorites.emptyTitle')}</Text>
+          <Text style={styles.emptyHint}>{t('favorites.emptyHint')}</Text>
         </View>
       )}
 
       {q.length > 0 && visible.length === 0 && items.length > 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>🔎</Text>
-          <Text style={styles.emptyText}>"{query}" için sonuç yok.</Text>
+          <Text style={styles.emptyText}>{t('favorites.noResult', { query })}</Text>
         </View>
       )}
 
@@ -208,10 +218,10 @@ export default function FavoritesScreen() {
             {!selectMode && (
               <View style={styles.actions}>
                 <Pressable onPress={() => onCopy(item.text, item.text)} style={styles.btn}>
-                  <Text style={styles.btnText}>{copiedKey === item.text ? '✓ Kopyalandı' : '⧉ Kopyala'}</Text>
+                  <Text style={styles.btnText}>{copiedKey === item.text ? `✓ ${t('common.copied')}` : `⧉ ${t('common.copy')}`}</Text>
                 </Pressable>
                 <Pressable onPress={() => onRemoveOne(item.text)} style={[styles.btn, styles.btnDanger]}>
-                  <Text style={[styles.btnText, styles.btnDangerText]}>✕ Kaldır</Text>
+                  <Text style={[styles.btnText, styles.btnDangerText]}>✕ {t('favorites.removeBtn')}</Text>
                 </Pressable>
               </View>
             )}

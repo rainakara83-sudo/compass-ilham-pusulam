@@ -4,17 +4,17 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ExperienceLevel, setExperience, setGoal, ContentGoal } from '../../services/storage';
 
-const LEVELS: { id: ExperienceLevel; icon: string; title: string; subtitle: string; color: string }[] = [
-  { id: 'beginner', icon: '🌱', title: 'Yeni başlıyorum', subtitle: '0–6 ay deneyim', color: '#10B981' },
-  { id: 'intermediate', icon: '🚀', title: 'Büyüyorum', subtitle: '6 ay – 2 yıl', color: '#4D96FF' },
-  { id: 'pro', icon: '👑', title: 'Profesyonelim', subtitle: '2+ yıl, düzenli üretim', color: '#F59E0B' },
+const LEVELS: { id: ExperienceLevel; icon: string; titleKey: string; subtitle: string; color: string }[] = [
+  { id: 'beginner', icon: '🌱', titleKey: 'profile.levelBeginner', subtitle: '0–6 ay deneyim', color: '#10B981' },
+  { id: 'intermediate', icon: '🚀', titleKey: 'profile.levelIntermediate', subtitle: '6 ay – 2 yıl', color: '#4D96FF' },
+  { id: 'pro', icon: '�', titleKey: 'profile.levelPro', subtitle: '2+ yıl, düzenli üretim', color: '#F59E0B' },
 ];
 
-const GOALS: { id: ContentGoal; icon: string; title: string }[] = [
-  { id: 'growth', icon: '📈', title: 'Büyümek' },
-  { id: 'engagement', icon: '💬', title: 'Etkileşim' },
-  { id: 'monetize', icon: '💰', title: 'Gelir' },
-  { id: 'community', icon: '🤝', title: 'Topluluk' },
+const GOALS: { id: ContentGoal; icon: string; titleKey: string }[] = [
+  { id: 'growth', icon: '📈', titleKey: 'profile.goalGrowth' },
+  { id: 'engagement', icon: '💬', titleKey: 'profile.goalEngagement' },
+  { id: 'monetize', icon: '💰', titleKey: 'profile.goalMonetize' },
+  { id: 'community', icon: '🤝', titleKey: 'profile.goalCommunity' },
 ];
 
 export default function ExperienceSelect() {
@@ -33,10 +33,10 @@ export default function ExperienceSelect() {
   return (
     <View style={styles.container}>
       <View style={styles.stepBadge}>
-        <Text style={styles.stepText}>3 / 4</Text>
+        <Text style={styles.stepText}>{t('onboardingFlow.stepOf', { current: 3, total: 4 })}</Text>
       </View>
-      <Text style={styles.title}>🎯 Seni tanıyalım</Text>
-      <Text style={styles.subtitle}>İçerik üretiminde deneyimin ve hedefin</Text>
+      <Text style={styles.title}>{t('onboardingFlow.experienceTitle')}</Text>
+      <Text style={styles.subtitle}>{t('onboardingFlow.experienceSubtitle')}</Text>
 
       <Text style={styles.section}>Deneyim seviyesi</Text>
       {LEVELS.map((l) => {
@@ -49,7 +49,7 @@ export default function ExperienceSelect() {
           >
             <Text style={styles.icon}>{l.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{l.title}</Text>
+              <Text style={styles.cardTitle}>{t(l.titleKey)}</Text>
               <Text style={styles.cardSub}>{l.subtitle}</Text>
             </View>
             {sel && <Text style={[styles.check, { color: l.color }]}>✓</Text>}
@@ -68,7 +68,7 @@ export default function ExperienceSelect() {
               style={[styles.goalCard, sel && styles.goalCardActive]}
             >
               <Text style={styles.goalIcon}>{g.icon}</Text>
-              <Text style={[styles.goalTitle, sel && { color: 'white' }]}>{g.title}</Text>
+              <Text style={[styles.goalTitle, sel && { color: 'white' }]}>{t(g.titleKey)}</Text>
             </Pressable>
           );
         })}
@@ -76,14 +76,14 @@ export default function ExperienceSelect() {
 
       <View style={styles.footer}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+          <Text style={styles.backBtnText}>{t('onboardingFlow.nicheBack')}</Text>
         </Pressable>
         <Pressable
           onPress={onContinue}
           disabled={!level || !goal}
           style={[styles.cta, { opacity: level && goal ? 1 : 0.4, flex: 1 }]}
         >
-          <Text style={styles.ctaText}>Başla 🚀</Text>
+          <Text style={styles.ctaText}>{t('onboardingFlow.experienceStart')}</Text>
         </Pressable>
       </View>
     </View>

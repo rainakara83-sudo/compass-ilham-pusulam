@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
+import i18n from '../../i18n';
 import {
   Stats,
   getStats,
@@ -17,20 +19,24 @@ import {
   ConsistencyScore,
 } from '../../services/storage';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
 
-type Tile = { key: keyof Stats; label: string; icon: string; color: string };
+type Tile = { key: keyof Stats; labelKey: string; icon: string; color: string };
 
 const TILES: Tile[] = [
-  { key: 'totalWeeks', label: 'Toplam Hafta', icon: '📅', color: '#4D96FF' },
-  { key: 'totalIdeas', label: 'Üretilen Fikir', icon: '💡', color: '#F59E0B' },
-  { key: 'totalFavorites', label: 'Favori', icon: '⭐', color: '#EC4899' },
-  { key: 'totalReminders', label: 'Hatırlatıcı', icon: '🔔', color: '#10B981' },
+  { key: 'totalWeeks', labelKey: 'totalWeeks', icon: '📅', color: '#4D96FF' },
+  { key: 'totalIdeas', labelKey: 'totalIdeas', icon: '💡', color: '#F59E0B' },
+  { key: 'totalFavorites', labelKey: 'totalFavorites', icon: '⭐', color: '#EC4899' },
+  { key: 'totalReminders', labelKey: 'totalReminders', icon: '🔔', color: '#10B981' },
 ];
 
 const NICHE_COLORS = ['#4D96FF', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6', '#06B6D4'];
 
+const WEEKDAY_ABBREV_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
 export default function StatsScreen() {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const router = useRouter();
   const [stats, setStats] = useState<Stats | null>(null);
   const [ideaStats, setIdeaStats] = useState<IdeaStats | null>(null);
@@ -79,31 +85,28 @@ export default function StatsScreen() {
   const trendMax = trend.length > 0 ? Math.max(...trend.map((p) => p.count)) : 1;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <PageHint hintId="stats" title={t('pageHints.stats.title')} description={t('pageHints.stats.desc')} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.title}>📊 İstatistikler</Text>
+        <Text style={styles.title}>📊 {t('stats.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
       <Text style={styles.subtitle}>
-        {stats.lastWeekId ? `Son hafta: ${stats.lastWeekId}` : 'Henüz veri yok'}
+        {stats.lastWeekId ? t('stats.lastWeek', { weekId: stats.lastWeekId }) : t('stats.noDataYet')}
       </Text>
 
       <Pressable onPress={() => router.push('/heatmap')} style={styles.heatmapCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.heatmapTitle}>🗓 İçerik Haritası</Text>
-          <Text style={styles.heatmapSub}>
-            Son 365 günün ısı haritası — hangi günlerde ürettin gör
-          </Text>
+          <Text style={styles.heatmapTitle}>🗓 {t('stats.heatmapTitle')}</Text>
+          <Text style={styles.heatmapSub}>{t('stats.heatmapSub')}</Text>
         </View>
         <Text style={styles.heatmapChev}>›</Text>
       </Pressable>
 
       <Pressable onPress={() => router.push('/weekly-streak')} style={styles.streakCard}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.streakTitle}>🔥 Haftalık Streak</Text>
-          <Text style={styles.streakSub}>
-            Haftalık seri takibi — hedeflerini gör, mükemmel haftaları kutla
-          </Text>
+          <Text style={styles.streakTitle}>🔥 {t('stats.streakTitle')}</Text>
+          <Text style={styles.streakSub}>{t('stats.streakSub')}</Text>
         </View>
         <Text style={styles.streakChev}>›</Text>
       </Pressable>
@@ -115,15 +118,15 @@ export default function StatsScreen() {
             <Text style={[styles.tileValue, { color: tile.color }]}>
               {String(stats[tile.key] ?? 0)}
             </Text>
-            <Text style={styles.tileLabel}>{tile.label}</Text>
+            <Text style={styles.tileLabel}>{t(`stats.${tile.labelKey}`)}</Text>
           </View>
         ))}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>🏷 Niş dağılımın</Text>
+        <Text style={styles.cardTitle}>🏷 {t('stats.nicheBreakdown')}</Text>
         {nicheEntries.length === 0 ? (
-          <Text style={styles.empty}>Henüz veri yok.</Text>
+          <Text style={styles.empty}>{t('stats.noDataYet')}</Text>
         ) : (
           nicheEntries.map(([id, count], idx) => {
             const pct = nicheMax > 0 ? Math.round((count / nicheMax) * 100) : 0;
@@ -145,16 +148,16 @@ export default function StatsScreen() {
 
       {ideaStats.topNiche && (
         <View style={[styles.card, styles.cardHighlight]}>
-          <Text style={styles.cardTitle}>🏆 En aktif nişin</Text>
-          <Text style={styles.highlightValue}>{ideaStats.topNicheLabel}</Text>
-          <Text style={styles.highlightSub}>{ideaStats.topNicheCount} fikir üretildi</Text>
+          <Text style={styles.cardTitle}>🏆 {t('stats.topNicheTitle')}</Text>
+          <Text style={styles.highlightValue}>{t(`niches.${ideaStats.topNiche}`, ideaStats.topNicheLabel ?? ideaStats.topNiche)}</Text>
+          <Text style={styles.highlightSub}>{t('stats.topNicheSub', { count: ideaStats.topNicheCount })}</Text>
         </View>
       )}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>📈 Haftalık trend</Text>
+        <Text style={styles.cardTitle}>📈 {t('stats.weeklyTrend')}</Text>
         {trend.length === 0 ? (
-          <Text style={styles.empty}>Henüz veri yok.</Text>
+          <Text style={styles.empty}>{t('stats.noDataYet')}</Text>
         ) : (
           <View style={styles.chartBox}>
             {trend.map((p) => {
@@ -175,16 +178,16 @@ export default function StatsScreen() {
 
       {ideaStats.mostFrequentIdea && ideaStats.mostFrequentIdea.count > 1 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🔥 Sık çıkan fikir</Text>
+          <Text style={styles.cardTitle}>🔥 {t('stats.frequentIdea')}</Text>
           <Text style={styles.repeatText} numberOfLines={3}>{ideaStats.mostFrequentIdea.text}</Text>
-          <Text style={styles.repeatCount}>{ideaStats.mostFrequentIdea.count} kez üretildi</Text>
+          <Text style={styles.repeatCount}>{t('stats.repeatCount', { count: ideaStats.mostFrequentIdea.count })}</Text>
         </View>
       )}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>📅 Son 7 gün aktivite</Text>
+        <Text style={styles.cardTitle}>📅 {t('stats.dailyActivity')}</Text>
         {dailyTrend.length === 0 ? (
-          <Text style={styles.empty}>Henüz veri yok.</Text>
+          <Text style={styles.empty}>{t('stats.noDataYet')}</Text>
         ) : (
           <View style={styles.heatRow}>
             {dailyTrend.map((p) => {
@@ -203,9 +206,7 @@ export default function StatsScreen() {
                   <View style={[styles.heatBox, { backgroundColor: bg, opacity: p.count === 0 ? 1 : intensity + 0.5 }]}>
                     <Text style={[styles.heatCount, { color: txtColor }]}>{p.count}</Text>
                   </View>
-                  <Text style={styles.heatLabel}>
-                    {['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'][p.weekday]}
-                  </Text>
+                  <Text style={styles.heatLabel}>{t(`weekdays.${WEEKDAY_ABBREV_KEYS[p.weekday]}`)}</Text>
                 </View>
               );
             })}
@@ -215,21 +216,21 @@ export default function StatsScreen() {
 
       {pace && pace.daysActive > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>⚡ Üretim hızı</Text>
+          <Text style={styles.cardTitle}>⚡ {t('stats.paceTitle')}</Text>
           <View style={styles.paceRow}>
             <View style={styles.paceItem}>
               <Text style={[styles.paceValue, { color: '#4D96FF' }]}>{pace.ideasPerDay}</Text>
-              <Text style={styles.paceLabel}>fikir/gün</Text>
+              <Text style={styles.paceLabel}>{t('stats.ideasPerDay')}</Text>
             </View>
             <View style={styles.paceDivider} />
             <View style={styles.paceItem}>
               <Text style={[styles.paceValue, { color: '#10B981' }]}>{pace.donePerDay}</Text>
-              <Text style={styles.paceLabel}>tamamlanan/gün</Text>
+              <Text style={styles.paceLabel}>{t('stats.donePerDay')}</Text>
             </View>
             <View style={styles.paceDivider} />
             <View style={styles.paceItem}>
               <Text style={[styles.paceValue, { color: '#F59E0B' }]}>{pace.daysActive}</Text>
-              <Text style={styles.paceLabel}>aktif gün</Text>
+              <Text style={styles.paceLabel}>{t('stats.activeDays')}</Text>
             </View>
           </View>
         </View>
@@ -237,9 +238,9 @@ export default function StatsScreen() {
 
       {consistency && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🎯 Tutarlılık skoru</Text>
+          <Text style={styles.cardTitle}>🎯 {t('stats.consistencyTitle')}</Text>
           <View style={styles.progHeader}>
-            <Text style={styles.progLabel}>Son {consistency.totalWeeks} hafta</Text>
+            <Text style={styles.progLabel}>{t('stats.lastNWeeks', { count: consistency.totalWeeks })}</Text>
             <Text style={[styles.progValue, { color: '#8B5CF6' }]}>%{consistency.score}</Text>
           </View>
           <View style={styles.progBg}>
@@ -248,27 +249,27 @@ export default function StatsScreen() {
             />
           </View>
           <Text style={styles.consistencySub}>
-            {consistency.weeksActive}/{consistency.totalWeeks} hafta aktif içerik ürettin
+            {t('stats.consistencySub', { active: consistency.weeksActive, total: consistency.totalWeeks })}
           </Text>
         </View>
       )}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>🎯 Hedefler</Text>
+        <Text style={styles.cardTitle}>🎯 {t('stats.goalsTitle')}</Text>
         <ProgressRow
-          label="Haftalık 3 fikir tamamlandı mı?"
+          label={t('stats.goalWeekly3')}
           current={stats.totalIdeas % 3 || 3}
           target={3}
           color="#4D96FF"
         />
         <ProgressRow
-          label="Favori sayısı"
+          label={t('stats.goalFavorites')}
           current={Math.min(stats.totalFavorites, 10)}
           target={10}
           color="#F59E0B"
         />
         <ProgressRow
-          label="Aktif hatırlatıcılar"
+          label={t('stats.goalReminders')}
           current={Math.min(stats.totalReminders, 5)}
           target={5}
           color="#10B981"
@@ -276,7 +277,7 @@ export default function StatsScreen() {
       </View>
 
       <Pressable onPress={load} style={styles.refreshBtn}>
-        <Text style={styles.refreshBtnText}>🔄 Yenile</Text>
+        <Text style={styles.refreshBtnText}>🔄 {t('common.refresh')}</Text>
       </Pressable>
     </ScrollView>
   );

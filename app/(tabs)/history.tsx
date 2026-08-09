@@ -2,6 +2,8 @@ import React, { useCallback, useState } from 'react';
 import { Alert, Clipboard, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
+import i18n from '../../i18n';
 import { HistoryEntry, deleteHistoryEntry, getDoneIdeas, getFavorites, getHistory, saveWeekToHistory } from '../../services/storage';
 import niches from '../../data/niches.json';
 import PlanBadge from '../../components/PlanBadge';
@@ -13,11 +15,48 @@ const ICONS = (niches as { id: string; icon: string }[]).reduce((acc, n) => {
 
 const formatDate = (ts: number) => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  try {
+    return d.toLocaleDateString(lng, { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return d.toLocaleDateString('en', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+};
+
+type DayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type DayCodeLong = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+const LONG_TO_SHORT: Record<DayCodeLong, DayCode> = {
+  monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri', saturday: 'sat', sunday: 'sun',
+};
+
+const dayCodeToDate = (code: DayCode): Date => {
+  const map: Record<DayCode, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
+  const base = new Date(2024, 0, 1);
+  const target = map[code] ?? 0;
+  const diff = (target - base.getDay() + 7) % 7;
+  base.setDate(base.getDate() + diff);
+  return base;
+};
+
+const formatDayLong = (code: string, lng: string): string => {
+  const valid: DayCode[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const validLong: DayCodeLong[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const normalized = code.toLowerCase();
+  let shortCode: DayCode | null = null;
+  if (valid.includes(normalized as DayCode)) shortCode = normalized as DayCode;
+  else if (validLong.includes(normalized as DayCodeLong)) shortCode = LONG_TO_SHORT[normalized as DayCodeLong];
+  if (!shortCode) return code.toUpperCase();
+  try {
+    return new Intl.DateTimeFormat(lng, { weekday: 'long' }).format(dayCodeToDate(shortCode));
+  } catch {
+    return code.toUpperCase();
+  }
 };
 
 export default function HistoryScreen() {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const router = useRouter();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -45,10 +84,10 @@ export default function HistoryScreen() {
   );
 
   const onDelete = (weekId: string) => {
-    Alert.alert('Geçmiş haftayı sil', `${weekId} haftası silinsin mi?`, [
+    Alert.alert(t('history.deleteTitle'), t('history.deleteMsg', { weekId }), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteHistoryEntry(weekId);
@@ -65,17 +104,18 @@ export default function HistoryScreen() {
   };
 
   const onExportWeek = async (h: HistoryEntry) => {
-    const lines: string[] = [`📅 ${h.weekId} — ${h.niche.toUpperCase()}`, ''];
+    const lng = (i18n.language || 'en').split('-')[0];
+    const lines: string[] = [t('history.exportHeader', { weekId: h.weekId, niche: h.niche.toUpperCase() }), ''];
     h.ideas.forEach((idea, idx) => {
-      lines.push(`${idx + 1}. [${idea.day.toUpperCase()}] ${idea.text}`);
+      lines.push(t('history.exportLine', { n: idx + 1, day: formatDayLong(idea.day, lng), text: idea.text }));
     });
-    lines.push('', '— Compass — İlham Pusulam');
+    lines.push('', t('history.exportFooter'));
     const message = lines.join('\n');
     try {
-      await Share.share({ message, title: `${h.weekId} içerik planı` });
+      await Share.share({ message, title: t('history.exportTitle', { weekId: h.weekId }) });
     } catch (e) {
       Clipboard.setString(message);
-      Alert.alert('Kopyalandı', 'Paylaşılamadı, fikirler panoya kopyalandı.');
+      Alert.alert(t('common.copiedTitle'), t('history.exportFailed'));
     }
   };
 
@@ -91,12 +131,12 @@ export default function HistoryScreen() {
   const onRestore = (h: HistoryEntry) => {
     const currentWeekId = getCurrentWeekId();
     Alert.alert(
-      'Haftayı geri yükle',
-      `${h.weekId} haftasındaki ${h.ideas.length} fikir bu haftaya aktarılır. Devam edilsin mi?`,
+      t('history.restoreTitle'),
+      t('history.restoreMsg', { weekId: h.weekId, count: h.ideas.length }),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Geri yükle',
+          text: t('history.restoreBtn'),
           onPress: async () => {
             await saveWeekToHistory({
               weekId: currentWeekId,
@@ -105,12 +145,12 @@ export default function HistoryScreen() {
               createdAt: Date.now(),
             });
             await load();
-            Alert.alert('Geri yüklendi', 'Bu haftaki fikirler güncellendi. Ana sayfaya dönün.', [
+            Alert.alert(t('history.restoredTitle'), t('history.restoredMsg'), [
               {
-                text: 'Ana sayfaya git',
+                text: t('history.goHome'),
                 onPress: () => router.replace('/(tabs)'),
               },
-              { text: 'Kapat', style: 'cancel' },
+              { text: t('common.close'), style: 'cancel' },
             ]);
           },
         },
@@ -181,18 +221,18 @@ export default function HistoryScreen() {
   const allExpanded = expanded === '__ALL__';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.title}>🗂 Geçmiş Haftalar</Text>
+        <Text style={styles.title}>🗂 {t('history.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
-      <Text style={styles.subtitle}>{history.length} hafta kayıtlı</Text>
+      <Text style={styles.subtitle}>{t('history.subtitle', { count: history.length })}</Text>
 
       {history.length > 0 && (
         <View style={styles.searchRow}>
           <TextInput
             style={styles.search}
-            placeholder="Geçmişte ara..."
+            placeholder={t('history.searchPlaceholder')}
             value={query}
             onChangeText={setQuery}
             placeholderTextColor="#9CA3AF"
@@ -207,7 +247,7 @@ export default function HistoryScreen() {
 
       {q.length > 0 && (
         <Text style={styles.matchInfo}>
-          {totalMatches === 0 ? 'Eşleşme yok' : `${totalMatches} fikirde eşleşti`}
+          {totalMatches === 0 ? t('favorites.noMatch') : t('favorites.matchCount', { count: totalMatches })}
         </Text>
       )}
 
@@ -215,28 +255,28 @@ export default function HistoryScreen() {
         <View style={styles.bulkRow}>
           <Pressable onPress={toggleCompareMode} style={[styles.bulkBtn, compareMode && styles.bulkBtnActive]}>
             <Text style={[styles.bulkBtnText, compareMode && styles.bulkBtnTextActive]}>
-              {compareMode ? '✕ Karşılaştırmadan çık' : '⇆ Karşılaştır'}
+              {compareMode ? t('history.exitCompare') : t('history.startCompare')}
             </Text>
           </Pressable>
           <Pressable onPress={toggleAll} style={styles.bulkBtn}>
-            <Text style={styles.bulkBtnText}>{allExpanded ? '▴ Daralt' : '▾ Tümünü genişlet'}</Text>
+            <Text style={styles.bulkBtnText}>{allExpanded ? t('history.collapseAll') : t('history.expandAll')}</Text>
           </Pressable>
         </View>
       )}
 
       {compareMode && (
         <View style={styles.compareBanner}>
-          <Text style={styles.compareBannerTitle}>⇆ Karşılaştırma modu</Text>
+          <Text style={styles.compareBannerTitle}>{t('history.compareBannerTitle')}</Text>
           <Text style={styles.compareBannerSub}>
             {compareA && compareB
-              ? 'İki hafta seçildi — aşağıya bak.'
+              ? t('history.compareBoth')
               : compareA
-                ? `1. hafta: ${compareA}. Şimdi 2. haftayı seç.`
-                : 'Karşılaştırmak için iki hafta seç.'}
+                ? t('history.compareOneA', { weekId: compareA })
+                : t('history.compareNone')}
           </Text>
           {(compareA || compareB) && (
             <Pressable onPress={() => { setCompareA(null); setCompareB(null); }} style={styles.compareClearBtn}>
-              <Text style={styles.compareClearBtnText}>Seçimi temizle</Text>
+              <Text style={styles.compareClearBtnText}>{t('history.clearSelection')}</Text>
             </Pressable>
           )}
         </View>
@@ -244,7 +284,7 @@ export default function HistoryScreen() {
 
       {compareMode && entryA && entryB && (
         <View style={styles.compareCard}>
-          <Text style={styles.compareCardTitle}>📊 Hafta karşılaştırması</Text>
+          <Text style={styles.compareCardTitle}>{t('history.compareTitle')}</Text>
           <View style={styles.compareGrid}>
             <View style={styles.compareCol}>
               <Text style={styles.compareColHead}>{entryA.weekId}</Text>
@@ -256,23 +296,24 @@ export default function HistoryScreen() {
             </View>
           </View>
           {(() => {
+            const lng = (i18n.language || 'en').split('-')[0];
             const a = statsOf(entryA);
             const b = statsOf(entryB);
-            const rows: { label: string; av: number | string; bv: number | string; highlight: 'a' | 'b' | null }[] = [
-              { label: 'Toplam fikir', av: entryA.ideas.length, bv: entryB.ideas.length, highlight: entryA.ideas.length > entryB.ideas.length ? 'a' : entryB.ideas.length > entryA.ideas.length ? 'b' : null },
-              { label: 'Favoriler', av: a.favCount, bv: b.favCount, highlight: a.favCount > b.favCount ? 'a' : b.favCount > a.favCount ? 'b' : null },
-              { label: 'Üretildi', av: a.doneCount, bv: b.doneCount, highlight: a.doneCount > b.doneCount ? 'a' : b.doneCount > a.doneCount ? 'b' : null },
-              { label: 'En aktif gün', av: a.topDay ? a.topDay.toUpperCase() : '—', bv: b.topDay ? b.topDay.toUpperCase() : '—', highlight: null },
+            const rows: { labelKey: string; av: number | string; bv: number | string; highlight: 'a' | 'b' | null }[] = [
+              { labelKey: 'compareTotal', av: entryA.ideas.length, bv: entryB.ideas.length, highlight: entryA.ideas.length > entryB.ideas.length ? 'a' : entryB.ideas.length > entryA.ideas.length ? 'b' : null },
+              { labelKey: 'compareFav', av: a.favCount, bv: b.favCount, highlight: a.favCount > b.favCount ? 'a' : b.favCount > a.favCount ? 'b' : null },
+              { labelKey: 'compareDone', av: a.doneCount, bv: b.doneCount, highlight: a.doneCount > b.doneCount ? 'a' : b.doneCount > a.doneCount ? 'b' : null },
+              { labelKey: 'compareTopDay', av: a.topDay ? formatDayLong(a.topDay, lng) : '—', bv: b.topDay ? formatDayLong(b.topDay, lng) : '—', highlight: null },
             ];
             return rows.map((r) => (
-              <View key={r.label} style={styles.compareRow}>
+              <View key={r.labelKey} style={styles.compareRow}>
                 <View style={[styles.compareCell, r.highlight === 'a' && styles.compareCellWin]}>
                   <Text style={[styles.compareCellValue, r.highlight === 'a' && styles.compareCellValueWin]}>
-                    {r.av}{typeof r.av === 'number' && r.label !== 'En aktif gün' ? '' : ''}
+                    {r.av}
                   </Text>
                 </View>
                 <View style={styles.compareRowLabel}>
-                  <Text style={styles.compareRowLabelText}>{r.label}</Text>
+                  <Text style={styles.compareRowLabelText}>{t(`history.${r.labelKey}`)}</Text>
                 </View>
                 <View style={[styles.compareCell, r.highlight === 'b' && styles.compareCellWin]}>
                   <Text style={[styles.compareCellValue, r.highlight === 'b' && styles.compareCellValueWin]}>
@@ -288,10 +329,8 @@ export default function HistoryScreen() {
       {history.length === 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📅</Text>
-          <Text style={styles.emptyText}>Henüz geçmiş hafta yok.</Text>
-          <Text style={styles.emptyHint}>
-            Ana sayfada fikirleri yenilediğinde burada otomatik olarak görünecek.
-          </Text>
+          <Text style={styles.emptyText}>{t('history.emptyTitle')}</Text>
+          <Text style={styles.emptyHint}>{t('history.emptyHint')}</Text>
         </View>
       )}
 
@@ -326,7 +365,7 @@ export default function HistoryScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.weekId}>{h.weekId}</Text>
                   <Text style={styles.weekMeta}>
-                    {h.niche} • {formatDate(h.createdAt)} • {h.ideas.length} fikir
+                    {h.niche} • {formatDate(h.createdAt)} • {t('history.ideaCount', { count: h.ideas.length })}
                   </Text>
                   {(favCount > 0 || doneCount > 0) && (
                     <View style={styles.badgeRow}>
@@ -350,7 +389,7 @@ export default function HistoryScreen() {
             {isOpen && (
               <View style={styles.body}>
                 {visibleIdeas.length === 0 && (
-                  <Text style={styles.noMatch}>Bu haftada "{query}" için fikir yok.</Text>
+                  <Text style={styles.noMatch}>{t('history.noIdeaForQuery', { query })}</Text>
                 )}
                 {visibleIdeas.map((idea, idx) => {
                   const isFav = favSet.has(idea.text);
@@ -362,9 +401,9 @@ export default function HistoryScreen() {
                         style={{ flex: 1 }}
                       >
                         <View style={styles.ideaLabelRow}>
-                          <Text style={styles.ideaDay}>{idea.day.toUpperCase()}</Text>
+                          <Text style={styles.ideaDay}>{formatDayLong(idea.day, (i18n.language || 'en').split('-')[0])}</Text>
                           {isFav && <Text style={styles.ideaFavTag}>★</Text>}
-                          {isDone && <Text style={styles.ideaDoneTag}>✓ üretildi</Text>}
+                          {isDone && <Text style={styles.ideaDoneTag}>{t('history.doneTag')}</Text>}
                         </View>
                         <Text style={[styles.ideaText, isDone && styles.ideaTextDone]}>{idea.text}</Text>
                       </Pressable>
@@ -381,13 +420,13 @@ export default function HistoryScreen() {
                 })}
                 <View style={styles.actionRow}>
                   <Pressable onPress={() => onRestore(h)} style={styles.restoreBtn}>
-                    <Text style={styles.restoreBtnText}>↺ Geri yükle</Text>
+                    <Text style={styles.restoreBtnText}>↺ {t('history.restoreBtn')}</Text>
                   </Pressable>
                   <Pressable onPress={() => onExportWeek(h)} style={styles.exportBtn}>
-                    <Text style={styles.exportBtnText}>↗ Dışa aktar</Text>
+                    <Text style={styles.exportBtnText}>↗ {t('history.exportBtn')}</Text>
                   </Pressable>
                   <Pressable onPress={() => onDelete(h.weekId)} style={styles.deleteBtn}>
-                    <Text style={styles.deleteBtnText}>🗑 Sil</Text>
+                    <Text style={styles.deleteBtnText}>🗑 {t('common.delete')}</Text>
                   </Pressable>
                 </View>
               </View>

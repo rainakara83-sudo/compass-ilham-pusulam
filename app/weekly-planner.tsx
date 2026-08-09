@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   ScheduleEntry,
   addScheduleEntry,
@@ -25,19 +26,13 @@ import {
 } from '../services/storage';
 import { NicheId, pickRandomFromPool } from '../services/contentService';
 import niches from '../data/niches.json';
+import i18n from '../i18n';
 
 type Niche = { id: string; icon: string; color: string };
 const NICHE_MAP = (niches as Niche[]).reduce((acc, n) => {
   acc[n.id] = n;
   return acc;
 }, {} as Record<string, Niche>);
-
-const DAY_NAMES = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
-const DAY_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-const MONTH_NAMES = [
-  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-];
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const dateKey = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -56,9 +51,14 @@ const addDays = (d: Date, n: number): Date => {
   return next;
 };
 
+const DAY_KEY = ['dayMon', 'dayTue', 'dayWed', 'dayThu', 'dayFri', 'daySat', 'daySun'];
+const SHORT_KEY = ['shortMon', 'shortTue', 'shortWed', 'shortThu', 'shortFri', 'shortSat', 'shortSun'];
+const MONTH_KEY = ['monthJan', 'monthFeb', 'monthMar', 'monthApr', 'monthMay', 'monthJun', 'monthJul', 'monthAug', 'monthSep', 'monthOct', 'monthNov', 'monthDec'];
+
 export default function WeeklyPlannerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [entries, setEntries] = useState<ScheduleEntry[] | null>(null);
   const [niche, setNiche] = useState<NicheId | null>(null);
@@ -115,7 +115,7 @@ export default function WeeklyPlannerScreen() {
     if (!showAdd) return;
     const text = draftText.trim();
     if (text.length === 0) {
-      Alert.alert('Fikir gerekli', 'Lütfen planlamak istediğin fikri yaz.');
+      Alert.alert(t('weeklyPlan.noIdeaTitle'), t('weeklyPlan.noIdeaBody'));
       return;
     }
     await addScheduleEntry(text, showAdd, draftNiche ?? niche, draftNote.trim() || undefined);
@@ -129,7 +129,7 @@ export default function WeeklyPlannerScreen() {
     const useNiche = (draftNiche ?? niche ?? 'personal_dev') as NicheId;
     const idea = pickRandomFromPool(useNiche);
     if (!idea) {
-      Alert.alert('Havuz boş', 'Bu niş için öneri bulunamadı.');
+      Alert.alert(t('weeklyPlan.poolEmptyTitle'), t('weeklyPlan.poolEmptyBody'));
       return;
     }
     setDraftText(idea);
@@ -141,10 +141,10 @@ export default function WeeklyPlannerScreen() {
   };
 
   const onRemove = (entry: ScheduleEntry) => {
-    Alert.alert('Planı kaldır', `“${entry.text.slice(0, 40)}${entry.text.length > 40 ? '…' : ''}” silinsin mi?`, [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('weeklyPlan.removeTitle'), t('weeklyPlan.removeBody', { text: `"${entry.text.slice(0, 40)}${entry.text.length > 40 ? '…' : ''}"` }), [
+      { text: t('weeklyPlan.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           const next = await removeScheduleEntry(entry.id);
@@ -159,12 +159,12 @@ export default function WeeklyPlannerScreen() {
     const items = dayEntries(dayIdx);
     if (items.length === 0) return;
     Alert.alert(
-      'Günü temizle',
-      `${DAY_NAMES[dayIdx]} günündeki ${items.length} plan silinsin mi?`,
+      t('weeklyPlan.clearDayTitle'),
+      t('weeklyPlan.clearDayBody', { day: t(`weeklyPlan.${DAY_KEY[dayIdx]}`), count: items.length }),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('weeklyPlan.cancelBtn'), style: 'cancel' },
         {
-          text: 'Temizle',
+          text: t('weeklyPlan.clearDayBtn'),
           style: 'destructive',
           onPress: async () => {
             const next = await clearScheduleForDate(key);
@@ -177,16 +177,16 @@ export default function WeeklyPlannerScreen() {
 
   const onCloneWeek = () => {
     Alert.alert(
-      'Haftayı kopyala',
-      'Bu haftaki planı gelecek haftaya (aynı günlere) kopyalar. Tamamlanmamış planlar yeni hafta için sıfırlanır.',
+      t('weeklyPlan.cloneWeekTitle'),
+      t('weeklyPlan.cloneWeekBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('weeklyPlan.cancelBtn'), style: 'cancel' },
         {
-          text: 'Kopyala',
+          text: t('weeklyPlan.cloneConfirmBtn'),
           onPress: async () => {
             const nextStart = addDays(weekStart, 7);
             await cloneWeekSchedule(dateKey(weekStart), dateKey(nextStart));
-            Alert.alert('Kopyalandı ✅', 'Plan gelecek haftaya aktarıldı.');
+            Alert.alert(t('weeklyPlan.cloneDoneTitle'), t('weeklyPlan.cloneDoneBody'));
           },
         },
       ]
@@ -195,12 +195,12 @@ export default function WeeklyPlannerScreen() {
 
   const onEditNote = async (entry: ScheduleEntry) => {
     Alert.prompt?.(
-      'Not ekle / düzenle',
-      'Bu plan için kısa bir not:',
+      t('weeklyPlan.editNoteTitle'),
+      t('weeklyPlan.editNoteBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('weeklyPlan.cancelBtn'), style: 'cancel' },
         {
-          text: 'Kaydet',
+          text: t('weeklyPlan.saveBtn'),
           onPress: async (val) => {
             const next = await updateScheduleEntry(entry.id, { note: val?.trim() || undefined } as Partial<Pick<ScheduleEntry, 'note'>>);
             setEntries(next.filter((e) => e.date >= dateKey(weekStart) && e.date <= dateKey(addDays(weekStart, 6))));
@@ -211,7 +211,7 @@ export default function WeeklyPlannerScreen() {
       entry.note ?? ''
     );
     if (!Alert.prompt) {
-      Alert.alert('Not özelliği', 'Cihazın bu özelliği desteklemiyor.');
+      Alert.alert(t('weeklyPlan.alertNotSupportedTitle'), t('weeklyPlan.alertNotSupportedBody'));
     }
   };
 
@@ -220,7 +220,7 @@ export default function WeeklyPlannerScreen() {
   const totalUpcoming = entries?.filter((e) => !e.done && e.date >= todayKey).length ?? 0;
 
   const weekEnd = addDays(weekStart, 6);
-  const rangeLabel = `${weekStart.getDate()} ${MONTH_NAMES[weekStart.getMonth()]} – ${weekEnd.getDate()} ${MONTH_NAMES[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
+  const rangeLabel = `${weekStart.getDate()} ${t(`weeklyPlan.${MONTH_KEY[weekStart.getMonth()]}`)} – ${weekEnd.getDate()} ${t(`weeklyPlan.${MONTH_KEY[weekEnd.getMonth()]}`)} ${weekEnd.getFullYear()}`;
 
   if (!entries) {
     return (
@@ -238,11 +238,11 @@ export default function WeeklyPlannerScreen() {
 
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Geri</Text>
+          <Text style={styles.backTxt}>{t('weeklyPlan.backBtn')}</Text>
         </Pressable>
-        <Text style={styles.title}>📅 Haftalık Planla</Text>
+        <Text style={styles.title}>{t('weeklyPlan.title')}</Text>
         <Pressable onPress={onCloneWeek} style={styles.cloneBtn}>
-          <Text style={styles.cloneBtnTxt}>⏩ Kopyala</Text>
+          <Text style={styles.cloneBtnTxt}>{t('weeklyPlan.cloneBtn')}</Text>
         </Pressable>
       </View>
 
@@ -252,7 +252,7 @@ export default function WeeklyPlannerScreen() {
         </Pressable>
         <Pressable onPress={goToday} style={styles.rangeCenter}>
           <Text style={styles.rangeLabel}>{rangeLabel}</Text>
-          <Text style={styles.rangeHint}>Bugüne dönmek için dokun</Text>
+          <Text style={styles.rangeHint}>{t('weeklyPlan.rangeHint')}</Text>
         </Pressable>
         <Pressable onPress={goNext} style={styles.rangeBtn}>
           <Text style={styles.rangeBtnTxt}>›</Text>
@@ -260,9 +260,9 @@ export default function WeeklyPlannerScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <Stat label="Planlanan" value={totalPlanned} color="#7c5cff" />
-        <Stat label="Yapılan" value={totalDone} color="#10B981" />
-        <Stat label="Bekleyen" value={totalUpcoming} color="#F59E0B" />
+        <Stat label={t('weeklyPlan.statPlanned')} value={totalPlanned} color="#7c5cff" />
+        <Stat label={t('weeklyPlan.statDone')} value={totalDone} color="#10B981" />
+        <Stat label={t('weeklyPlan.statUpcoming')} value={totalUpcoming} color="#F59E0B" />
       </View>
 
       <ScrollView
@@ -280,10 +280,10 @@ export default function WeeklyPlannerScreen() {
               <View style={styles.dayHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.dayTitle, isToday && styles.dayTitleToday]}>
-                    {DAY_NAMES[dayIdx]} {isToday ? '· Bugün' : ''}
+                    {t(`weeklyPlan.${DAY_KEY[dayIdx]}`)} {isToday ? t('weeklyPlan.today') : ''}
                   </Text>
                   <Text style={styles.dayDate}>
-                    {day.getDate()} {MONTH_NAMES[day.getMonth()]} · {doneCount}/{items.length} tamam
+                    {day.getDate()} {t(`weeklyPlan.${MONTH_KEY[day.getMonth()]}`)} · {t('weeklyPlan.doneFraction', { done: doneCount, total: items.length })}
                   </Text>
                 </View>
                 {items.length > 0 && (
@@ -294,7 +294,7 @@ export default function WeeklyPlannerScreen() {
               </View>
 
               {items.length === 0 ? (
-                <Text style={styles.dayEmpty}>Bu gün için plan yok.</Text>
+                <Text style={styles.dayEmpty}>{t('weeklyPlan.dayEmpty')}</Text>
               ) : (
                 items.map((entry) => {
                   const meta = NICHE_MAP[entry.niche];
@@ -315,7 +315,7 @@ export default function WeeklyPlannerScreen() {
                         <View style={styles.entryMeta}>
                           {meta && (
                             <Text style={styles.entryNiche}>
-                              {meta.icon} {meta.id}
+                              {meta.icon} {t(`niches.${entry.niche}`, entry.niche)}
                             </Text>
                           )}
                           {entry.note && <Text style={styles.entryNote}>📝 {entry.note}</Text>}
@@ -333,7 +333,7 @@ export default function WeeklyPlannerScreen() {
               )}
 
               <Pressable onPress={() => openAdd(dayIdx)} style={styles.dayAddBtn}>
-                <Text style={styles.dayAddBtnTxt}>+ Bu güne fikir ekle</Text>
+                <Text style={styles.dayAddBtnTxt}>{t('weeklyPlan.dayAddBtn')}</Text>
               </Pressable>
             </View>
           );
@@ -344,13 +344,17 @@ export default function WeeklyPlannerScreen() {
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {showAdd ? `${DAY_SHORT[(new Date(showAdd).getDay() + 6) % 7]} · ${new Date(showAdd).getDate()} ${MONTH_NAMES[new Date(showAdd).getMonth()]}` : ''}
+              {showAdd ? t('weeklyPlan.modalTitleFmt', {
+                short: t(`weeklyPlan.${SHORT_KEY[(new Date(showAdd).getDay() + 6) % 7]}`),
+                day: new Date(showAdd).getDate(),
+                month: t(`weeklyPlan.${MONTH_KEY[new Date(showAdd).getMonth()]}`),
+              }) : ''}
             </Text>
 
             <TextInput
               value={draftText}
               onChangeText={setDraftText}
-              placeholder="Planlamak istediğin fikir…"
+              placeholder={t('weeklyPlan.draftTextPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={styles.modalInput}
               multiline
@@ -359,33 +363,33 @@ export default function WeeklyPlannerScreen() {
             />
 
             <Pressable onPress={onPickFromPool} style={styles.modalPickBtn}>
-              <Text style={styles.modalPickBtnTxt}>🎲 Havuzdan rastgele al</Text>
+              <Text style={styles.modalPickBtnTxt}>{t('weeklyPlan.pickFromPool')}</Text>
             </Pressable>
 
             <TextInput
               value={draftNote}
               onChangeText={setDraftNote}
-              placeholder="Not (opsiyonel, örn: sabah 09:00 yayınla)"
+              placeholder={t('weeklyPlan.notePlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={[styles.modalInput, { marginTop: 8, minHeight: 50 }]}
               maxLength={80}
             />
 
-            <Text style={styles.modalLabel}>Niş</Text>
+            <Text style={styles.modalLabel}>{t('weeklyPlan.nicheLabel')}</Text>
             <Pressable onPress={() => setPickerNiche(true)} style={styles.modalNicheBtn}>
               <Text style={styles.modalNicheBtnTxt}>
                 {draftNiche && NICHE_MAP[draftNiche]
-                  ? `${NICHE_MAP[draftNiche].icon} ${draftNiche}`
-                  : '— Seç —'}
+                  ? `${NICHE_MAP[draftNiche].icon} ${t(`niches.${draftNiche}`, draftNiche)}`
+                  : t('weeklyPlan.nicheSelectPlaceholder')}
               </Text>
             </Pressable>
 
             <View style={styles.modalActions}>
               <Pressable onPress={() => setShowAdd(null)} style={[styles.modalBtn, styles.modalBtnCancel]}>
-                <Text style={styles.modalBtnCancelTxt}>Vazgeç</Text>
+                <Text style={styles.modalBtnCancelTxt}>{t('weeklyPlan.cancelBtn')}</Text>
               </Pressable>
               <Pressable onPress={onSaveAdd} style={[styles.modalBtn, styles.modalBtnSave]}>
-                <Text style={styles.modalBtnSaveTxt}>Kaydet</Text>
+                <Text style={styles.modalBtnSaveTxt}>{t('weeklyPlan.saveBtn')}</Text>
               </Pressable>
             </View>
           </View>
@@ -395,7 +399,7 @@ export default function WeeklyPlannerScreen() {
       <Modal visible={pickerNiche} animationType="slide" transparent onRequestClose={() => setPickerNiche(false)}>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Niş seç</Text>
+            <Text style={styles.modalTitle}>{t('weeklyPlan.modalNichePickerTitle')}</Text>
             <ScrollView style={{ maxHeight: 320 }}>
               {NICHE_LIST.map(([id, m]) => (
                 <Pressable
@@ -407,13 +411,13 @@ export default function WeeklyPlannerScreen() {
                   style={styles.nicheRow}
                 >
                   <Text style={styles.nicheIcon}>{m.icon}</Text>
-                  <Text style={styles.nicheLabel}>{id}</Text>
+                  <Text style={styles.nicheLabel}>{t(`niches.${id}`, id)}</Text>
                   {draftNiche === id && <Text style={styles.nicheCheck}>✓</Text>}
                 </Pressable>
               ))}
             </ScrollView>
             <Pressable onPress={() => setPickerNiche(false)} style={[styles.modalBtn, styles.modalBtnCancel, { marginTop: 10 }]}>
-              <Text style={styles.modalBtnCancelTxt}>Kapat</Text>
+              <Text style={styles.modalBtnCancelTxt}>{t('weeklyPlan.closeBtn')}</Text>
             </Pressable>
           </View>
         </View>

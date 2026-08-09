@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   HOOK_STYLES,
   HOOK_FORMATS,
@@ -24,8 +25,13 @@ import {
   addCopyToHistory,
   getStoredNiche,
   generateHooks,
+  saveHooksBulk,
+  estimateHookReach,
+  SavedHook,
 } from '../services/storage';
 import { NicheId } from '../services/contentService';
+import i18n from '../i18n';
+import PageHint from '../components/PageHint';
 
 const STYLE_ICONS: Record<HookStyle, { emoji: string; color: string; bg: string }> = {
   question: { emoji: '❓', color: '#0EA5E9', bg: '#E0F2FE' },
@@ -39,6 +45,7 @@ const STYLE_ICONS: Record<HookStyle, { emoji: string; color: string; bg: string 
 export default function HooksScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, i18n: i18nInstance } = useTranslation();
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [styleFilter, setStyleFilter] = useState<HookStyle | 'all'>('all');
   const [formatFilter, setFormatFilter] = useState<HookFormat | 'all'>('all');
@@ -79,6 +86,23 @@ export default function HooksScreen() {
     setHooks(list);
     setGenCount((c) => c + 1);
     setLoading(false);
+    const lng = (i18n.language || 'tr').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr';
+    const saved: SavedHook[] = list.map((h) => ({
+      id: `hk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${h.templateId}`,
+      text: h.text,
+      style: h.style,
+      format: h.format,
+      pattern: h.pattern,
+      templateId: h.templateId,
+      niche,
+      reach: estimateHookReach(h),
+      language: lng,
+      createdAt: Date.now(),
+      favorited: false,
+    }));
+    try {
+      await saveHooksBulk(saved);
+    } catch {}
   }, [niche, styleFilter, formatFilter]);
 
   const isFavorited = (h: GeneratedHook): boolean => {
@@ -120,7 +144,7 @@ export default function HooksScreen() {
         await addCopyToHistory(h.text, 'detail');
         setTimeout(() => setCopiedIdx(null), 1500);
       } catch {
-        Alert.alert('Hata', 'Kopyalanamadı');
+        Alert.alert(t('hooks.copyErrorTitle'), t('hooks.copyErrorBody'));
       }
     },
     []
@@ -128,12 +152,12 @@ export default function HooksScreen() {
 
   const clearAllFavorites = useCallback(() => {
     Alert.alert(
-      'Favorileri temizle',
-      `${favorites.length} favoriyi silmek istediğine emin misin?`,
+      t('hooks.clearAlertTitle'),
+      t('hooks.clearAlertBody', { count: favorites.length }),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('hooks.cancelBtn'), style: 'cancel' },
         {
-          text: 'Sil',
+          text: t('hooks.deleteBtn'),
           style: 'destructive',
           onPress: async () => {
             for (const f of favorites) {
@@ -144,7 +168,7 @@ export default function HooksScreen() {
         },
       ]
     );
-  }, [favorites]);
+  }, [favorites, t]);
 
   const styleCount: Record<HookStyle, number> = {
     question: 0,
@@ -173,23 +197,33 @@ export default function HooksScreen() {
     <View style={styles.root}>
       <Stack.Screen
         options={{
-          title: 'Hook Üretici',
+          title: t('hooks.title'),
           headerStyle: { backgroundColor: '#fff' },
           headerTitleStyle: { fontWeight: '700' },
           headerLeft: () => (
             <Pressable onPress={() => router.back()} style={{ paddingHorizontal: 12 }}>
-              <Text style={{ fontSize: 18 }}>‹ Geri</Text>
+              <Text style={{ fontSize: 18 }}>{t('hooks.backBtn')}</Text>
             </Pressable>
           ),
           headerRight: () => (
-            <Pressable
-              onPress={() => setShowFavorites((v) => !v)}
-              style={{ paddingHorizontal: 12 }}
-            >
-              <Text style={{ fontSize: 14, color: '#0EA5E9', fontWeight: '600' }}>
-                {showFavorites ? 'Listeye dön' : `⭐ ${favorites.length}`}
-              </Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Pressable
+                onPress={() => router.push('/hook-library')}
+                style={{ paddingHorizontal: 8 }}
+              >
+                <Text style={{ fontSize: 14, color: '#0EA5E9', fontWeight: '600' }}>
+                  📚
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setShowFavorites((v) => !v)}
+                style={{ paddingHorizontal: 12 }}
+              >
+                <Text style={{ fontSize: 14, color: '#0EA5E9', fontWeight: '600' }}>
+                  {showFavorites ? t('hooks.listBack') : t('hooks.favCountTpl', { count: favorites.length })}
+                </Text>
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -201,34 +235,35 @@ export default function HooksScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <PageHint hintId="hooks" title={t('pageHints.hooks.title')} description={t('pageHints.hooks.desc')} variant="tip" />
         {!showFavorites ? (
           <>
             <View style={styles.hero}>
-              <Text style={styles.heroBadge}>🎣 HOOK ÜRETİCİ</Text>
-              <Text style={styles.heroTitle}>Dikkat çeken açılışlar</Text>
+              <Text style={styles.heroBadge}>{t('hooks.heroBadge')}</Text>
+              <Text style={styles.heroTitle}>{t('hooks.heroTitle')}</Text>
               <Text style={styles.heroSub}>
                 {niche
-                  ? `Nişine özel 30+ hook — 6 stil × 5 format`
-                  : 'Önce niş seç ama genel hooklar da işe yarar'}
+                  ? t('hooks.heroSubNiche')
+                  : t('hooks.heroSubNoNiche')}
               </Text>
               <View style={styles.heroStats}>
                 <View style={styles.heroStat}>
                   <Text style={styles.heroStatValue}>{hooks.length}</Text>
-                  <Text style={styles.heroStatLabel}>üretildi</Text>
+                  <Text style={styles.heroStatLabel}>{t('hooks.statGenerated')}</Text>
                 </View>
                 <View style={styles.heroStat}>
                   <Text style={styles.heroStatValue}>{favorites.length}</Text>
-                  <Text style={styles.heroStatLabel}>favori</Text>
+                  <Text style={styles.heroStatLabel}>{t('hooks.statFavorites')}</Text>
                 </View>
                 <View style={styles.heroStat}>
                   <Text style={styles.heroStatValue}>{genCount}</Text>
-                  <Text style={styles.heroStatLabel}>yenileme</Text>
+                  <Text style={styles.heroStatLabel}>{t('hooks.statRefreshes')}</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Stil</Text>
+              <Text style={styles.sectionTitle}>{t('hooks.styleTitle')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                 <Pressable
                   onPress={() => setStyleFilter('all')}
@@ -238,7 +273,7 @@ export default function HooksScreen() {
                   ]}
                 >
                   <Text style={[styles.styleChipText, styleFilter === 'all' && styles.styleChipTextOn]}>
-                    Tümü
+                    {t('hooks.allFilter')}
                   </Text>
                 </Pressable>
                 {HOOK_STYLES.map((s) => {
@@ -266,7 +301,7 @@ export default function HooksScreen() {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Format</Text>
+              <Text style={styles.sectionTitle}>{t('hooks.formatTitle')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                 <Pressable
                   onPress={() => setFormatFilter('all')}
@@ -276,7 +311,7 @@ export default function HooksScreen() {
                   ]}
                 >
                   <Text style={[styles.styleChipText, formatFilter === 'all' && styles.styleChipTextOn]}>
-                    Tümü
+                    {t('hooks.allFilter')}
                   </Text>
                 </Pressable>
                 {HOOK_FORMATS.map((f) => {
@@ -304,7 +339,7 @@ export default function HooksScreen() {
             </View>
 
             <Pressable onPress={regenerate} style={styles.refreshBtn}>
-              <Text style={styles.refreshBtnText}>🔄 30 yeni hook üret</Text>
+              <Text style={styles.refreshBtnText}>{t('hooks.refreshBtn')}</Text>
             </Pressable>
 
             {loading ? (
@@ -312,7 +347,7 @@ export default function HooksScreen() {
             ) : (
               <View style={styles.hookList}>
                 {hooks.length === 0 ? (
-                  <Text style={styles.emptyText}>Bu kombinasyonda hook yok. Filtreleri gevşet.</Text>
+                  <Text style={styles.emptyText}>{t('hooks.emptyText')}</Text>
                 ) : (
                   hooks.map((h, idx) => {
                     const styleInfo = STYLE_ICONS[h.style];
@@ -333,14 +368,14 @@ export default function HooksScreen() {
                           </View>
                         </View>
                         <Text style={styles.hookText}>{h.text}</Text>
-                        <Text style={styles.hookPattern}>Şablon: {h.pattern}</Text>
+                        <Text style={styles.hookPattern}>{t('hooks.patternPrefix')}{h.pattern}</Text>
                         <View style={styles.hookActions}>
                           <Pressable
                             onPress={() => copyHook(h, idx)}
                             style={[styles.hookBtn, styles.hookBtnCopy]}
                           >
                             <Text style={styles.hookBtnCopyText}>
-                              {copiedIdx === idx ? '✓ Kopyalandı' : '📋 Kopyala'}
+                              {copiedIdx === idx ? t('hooks.copyDone') : t('hooks.copyBtn')}
                             </Text>
                           </Pressable>
                           <Pressable
@@ -348,7 +383,7 @@ export default function HooksScreen() {
                             style={[styles.hookBtn, styles.hookBtnFav, isFav && styles.hookBtnFavOn]}
                           >
                             <Text style={[styles.hookBtnFavText, isFav && styles.hookBtnFavTextOn]}>
-                              {isFav ? '⭐ Favoride' : '☆ Favoriye ekle'}
+                              {isFav ? t('hooks.favorited') : t('hooks.addFavorite')}
                             </Text>
                           </Pressable>
                         </View>
@@ -360,31 +395,31 @@ export default function HooksScreen() {
             )}
 
             <View style={styles.tipBox}>
-              <Text style={styles.tipTitle}>💡 İpucu</Text>
+              <Text style={styles.tipTitle}>{t('hooks.tipTitle')}</Text>
               <Text style={styles.tipText}>
-                Hook = postun ilk 1-3 saniyesi/dilimi. Cesur ve soru tipleri daha çok etkileşim alır. Bir fikre 3 farklı hook yazıp A/B testi yapabilirsin.
+                {t('hooks.tipBody')}
               </Text>
             </View>
           </>
         ) : (
           <>
             <View style={styles.hero}>
-              <Text style={styles.heroBadge}>⭐ FAVORİ HOOKLAR</Text>
-              <Text style={styles.heroTitle}>Kaydettiklerin</Text>
+              <Text style={styles.heroBadge}>{t('hooks.favHeroBadge')}</Text>
+              <Text style={styles.heroTitle}>{t('hooks.favHeroTitle')}</Text>
               <Text style={styles.heroSub}>
-                {favorites.length} hook favoride. Buradan hızlıca kopyalayıp kullanabilirsin.
+                {t('hooks.favHeroSub', { count: favorites.length })}
               </Text>
             </View>
 
             {favorites.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyEmoji}>📭</Text>
-                <Text style={styles.emptyText}>Henüz favori yok. Listedeki hookları ⭐ ile kaydet.</Text>
+                <Text style={styles.emptyText}>{t('hooks.favEmpty')}</Text>
               </View>
             ) : (
               <>
                 <Pressable onPress={clearAllFavorites} style={styles.clearBtn}>
-                  <Text style={styles.clearBtnText}>🗑 Tüm favorileri temizle</Text>
+                  <Text style={styles.clearBtnText}>{t('hooks.clearAllBtn')}</Text>
                 </Pressable>
                 <View style={styles.hookList}>
                   {favorites.map((f, idx) => {
@@ -405,9 +440,9 @@ export default function HooksScreen() {
                           </View>
                         </View>
                         <Text style={styles.hookText}>{f.text}</Text>
-                        <Text style={styles.hookPattern}>Şablon: {f.pattern}</Text>
+                        <Text style={styles.hookPattern}>{t('hooks.patternPrefix')}{f.pattern}</Text>
                         <Text style={styles.hookMeta}>
-                          {new Date(f.savedAt).toLocaleDateString('tr-TR', {
+                          {new Date(f.savedAt).toLocaleDateString((i18nInstance.language || 'en').split('-')[0], {
                             day: '2-digit',
                             month: 'short',
                           })}
@@ -418,11 +453,11 @@ export default function HooksScreen() {
                             onPress={async () => {
                               Clipboard.setString(f.text);
                               await addCopyToHistory(f.text, 'detail');
-                              Alert.alert('Kopyalandı', 'Favori hook panoya eklendi.');
+                              Alert.alert(t('hooks.copyAlertTitle'), t('hooks.copyAlertBody'));
                             }}
                             style={[styles.hookBtn, styles.hookBtnCopy]}
                           >
-                            <Text style={styles.hookBtnCopyText}>📋 Kopyala</Text>
+                            <Text style={styles.hookBtnCopyText}>{t('hooks.copyBtn')}</Text>
                           </Pressable>
                           <Pressable
                             onPress={async () => {
@@ -432,7 +467,7 @@ export default function HooksScreen() {
                             style={[styles.hookBtn, styles.hookBtnFav, styles.hookBtnFavOn]}
                           >
                             <Text style={[styles.hookBtnFavText, styles.hookBtnFavTextOn]}>
-                              🗑 Favoriden çıkar
+                              {t('hooks.removeFavBtn')}
                             </Text>
                           </Pressable>
                         </View>

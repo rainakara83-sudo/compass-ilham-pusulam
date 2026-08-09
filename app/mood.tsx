@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   MOODS,
   MoodId,
@@ -28,14 +29,8 @@ import {
 } from '../services/storage';
 import { NicheId } from '../services/contentService';
 
-const moodReasonShort = (m: MoodMatch): string => {
-  if (m.score >= 4) return '✨ Mükemmel eşleşme';
-  if (m.score >= 2) return '🎯 İyi eşleşme';
-  if (m.score >= 1) return '💫 Uyumlu';
-  return '🌀 Genel havuzdan';
-};
-
 export default function MoodScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [niche, setNiche] = useState<NicheId | null>(null);
@@ -46,6 +41,16 @@ export default function MoodScreen() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<MoodSessionEntry[]>([]);
   const [energyHint, setEnergyHint] = useState<string | null>(null);
+
+  const moodReasonShort = (m: MoodMatch): string => {
+    if (m.score >= 4) return t('moodIdeas.match4');
+    if (m.score >= 2) return t('moodIdeas.match2');
+    if (m.score >= 1) return t('moodIdeas.match1');
+    return t('moodIdeas.match0');
+  };
+
+  const moodLabel = useCallback((id: MoodId): string => t(`moodIdeas.moods.${id}.label`), [t]);
+  const moodTagline = useCallback((id: MoodId): string => t(`moodIdeas.moods.${id}.tagline`), [t]);
 
   useEffect(() => {
     (async () => {
@@ -71,14 +76,14 @@ export default function MoodScreen() {
       setSelectedMood(mood.id);
       setLoading(true);
       setMatches([]);
-      setEnergyHint(mood.tagline);
+      setEnergyHint(moodTagline(mood.id));
       await new Promise((r) => setTimeout(r, 220));
       const exclude = history.filter((h) => h.mood === mood.id).slice(0, 12).map((h) => h.idea);
       const result = pickIdeasForMood(niche, mood, 8, exclude);
       setMatches(result);
       setLoading(false);
     },
-    [niche, history]
+    [niche, history, moodTagline]
   );
 
   const reroll = useCallback(async () => {
@@ -130,12 +135,21 @@ export default function MoodScreen() {
 
   const onClearHistory = () => {
     if (history.length === 0) return;
-    AlertClearHistory(() => {
-      (async () => {
-        await clearMoodHistory();
-        setHistory([]);
-      })();
-    });
+    Alert.alert(
+      t('moodIdeas.clearConfirmTitle'),
+      t('moodIdeas.clearConfirmMsg'),
+      [
+        { text: t('moodIdeas.clearConfirmCancel'), style: 'cancel' },
+        {
+          text: t('moodIdeas.clearConfirmOk'),
+          style: 'destructive',
+          onPress: async () => {
+            await clearMoodHistory();
+            setHistory([]);
+          },
+        },
+      ]
+    );
   };
 
   const moodCounts = history.reduce<Record<string, number>>((acc, h) => {
@@ -150,7 +164,7 @@ export default function MoodScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: '🎭 Ruh Haline Göre',
+          title: t('moodIdeas.screenTitle'),
           headerStyle: { backgroundColor: '#fff' },
           headerShadowVisible: false,
         }}
@@ -160,13 +174,13 @@ export default function MoodScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerCard}>
-          <Text style={styles.headerEyebrow}>BUGÜN NASIL HİSSEDİYORSUN?</Text>
-          <Text style={styles.headerTitle}>Ruh halini seç, fikirleri senin tonuna göre filtreleyelim.</Text>
+          <Text style={styles.headerEyebrow}>{t('moodIdeas.eyebrow')}</Text>
+          <Text style={styles.headerTitle}>{t('moodIdeas.headerTitle')}</Text>
           {dominantMood && (
             <View style={styles.headerStats}>
               <View style={styles.headerStat}>
                 <Text style={styles.headerStatValue}>{totalPicked}</Text>
-                <Text style={styles.headerStatLabel}>Toplam seçim</Text>
+                <Text style={styles.headerStatLabel}>{t('moodIdeas.totalPicked')}</Text>
               </View>
               <View style={styles.headerStatDivider} />
               <View style={styles.headerStat}>
@@ -174,7 +188,7 @@ export default function MoodScreen() {
                   {MOODS.find((m) => m.id === dominantMood[0])?.emoji}
                 </Text>
                 <Text style={styles.headerStatLabel}>
-                  {MOODS.find((m) => m.id === dominantMood[0])?.label} ({dominantMood[1]})
+                  {moodLabel(dominantMood[0] as MoodId)} ({dominantMood[1]})
                 </Text>
               </View>
             </View>
@@ -196,8 +210,8 @@ export default function MoodScreen() {
                 ]}
               >
                 <Text style={styles.moodEmoji}>{m.emoji}</Text>
-                <Text style={[styles.moodLabel, { color: m.color }]}>{m.label}</Text>
-                <Text style={styles.moodTagline} numberOfLines={2}>{m.tagline}</Text>
+                <Text style={[styles.moodLabel, { color: m.color }]}>{moodLabel(m.id)}</Text>
+                <Text style={styles.moodTagline} numberOfLines={2}>{moodTagline(m.id)}</Text>
                 {count > 0 && (
                   <View style={[styles.moodCountBadge, { backgroundColor: m.color }]}>
                     <Text style={styles.moodCountText}>{count}×</Text>
@@ -213,9 +227,9 @@ export default function MoodScreen() {
             <Text style={styles.hintIcon}>{moodForCard.emoji}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[styles.hintTitle, { color: moodForCard.color }]}>
-                {moodForCard.label} moduna geçtin
+                {t('moodIdeas.moodChanged', { mood: moodLabel(moodForCard.id) })}
               </Text>
-              <Text style={styles.hintText}>{moodForCard.tagline}</Text>
+              <Text style={styles.hintText}>{moodTagline(moodForCard.id)}</Text>
             </View>
           </View>
         )}
@@ -230,7 +244,7 @@ export default function MoodScreen() {
               {loading ? (
                 <ActivityIndicator color="#7c5cff" />
               ) : (
-                <Text style={styles.rerollBtnText}>🎲 Yeni 8 fikir getir</Text>
+                <Text style={styles.rerollBtnText}>{t('moodIdeas.rerollBtn')}</Text>
               )}
             </Pressable>
             <Pressable
@@ -241,7 +255,7 @@ export default function MoodScreen() {
               }}
               style={styles.resetBtn}
             >
-              <Text style={styles.resetBtnText}>Sıfırla</Text>
+              <Text style={styles.resetBtnText}>{t('moodIdeas.resetBtn')}</Text>
             </Pressable>
           </View>
         )}
@@ -249,8 +263,8 @@ export default function MoodScreen() {
         {!selectedMood && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyEmoji}>👆</Text>
-            <Text style={styles.emptyText}>Başlamak için yukarıdan bir ruh hali seç.</Text>
-            <Text style={styles.emptyHint}>6 farklı ton — enerjik, sakin, yaratıcı, yorgun, düşünceli, eğlenceli.</Text>
+            <Text style={styles.emptyText}>{t('moodIdeas.emptyText')}</Text>
+            <Text style={styles.emptyHint}>{t('moodIdeas.emptyHint')}</Text>
           </View>
         )}
 
@@ -258,7 +272,7 @@ export default function MoodScreen() {
           <View style={styles.loadingCard}>
             <ActivityIndicator color={moodForCard?.color ?? '#7c5cff'} />
             <Text style={[styles.loadingText, { color: moodForCard?.color ?? '#7c5cff' }]}>
-              {moodForCard?.label} moduna uygun fikirler aranıyor…
+              {moodForCard ? t('moodIdeas.moodSearching', { mood: moodLabel(moodForCard.id) }) : ''}
             </Text>
           </View>
         )}
@@ -267,10 +281,10 @@ export default function MoodScreen() {
           <View>
             <View style={styles.resultHeader}>
               <Text style={styles.resultTitle}>
-                {matches.length} fikir bulundu
+                {t('moodIdeas.foundCount', { count: matches.length })}
               </Text>
               <Text style={styles.resultSub}>
-                Skor = mood'a uygunluk (yüksek = daha iyi eşleşme)
+                {t('moodIdeas.scoreHint')}
               </Text>
             </View>
 
@@ -299,16 +313,16 @@ export default function MoodScreen() {
                   <View style={styles.ideaActions}>
                     <Pressable onPress={() => onCopy(idx, m.idea)} style={styles.actionBtn}>
                       <Text style={[styles.actionBtnText, copiedIdx === idx && { color: '#10B981' }]}>
-                        {copiedIdx === idx ? '✓ Kopyalandı' : '⧉ Kopyala'}
+                        {copiedIdx === idx ? t('moodIdeas.copied') : t('moodIdeas.copy')}
                       </Text>
                     </Pressable>
                     <Pressable onPress={() => onFav(m.idea)} style={styles.actionBtn}>
                       <Text style={[styles.actionBtnText, isFav && { color: '#F59E0B' }]}>
-                        {isFav ? '★ Favoride' : '☆ Favori'}
+                        {isFav ? t('moodIdeas.favOn') : t('moodIdeas.favOff')}
                       </Text>
                     </Pressable>
                     <Pressable onPress={() => openDetail(m.idea)} style={styles.actionBtn}>
-                      <Text style={styles.actionBtnText}>↗ Detay</Text>
+                      <Text style={styles.actionBtnText}>{t('moodIdeas.detail')}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -320,9 +334,9 @@ export default function MoodScreen() {
         {selectedMood && !loading && matches.length === 0 && (
           <View style={styles.noMatchCard}>
             <Text style={styles.noMatchEmoji}>😶‍🌫️</Text>
-            <Text style={styles.noMatchText}>Bu ruh haliyle eşleşen fikir kalmadı.</Text>
+            <Text style={styles.noMatchText}>{t('moodIdeas.noMatchText')}</Text>
             <Pressable onPress={reroll} style={styles.noMatchBtn}>
-              <Text style={styles.noMatchBtnText}>🔄 Yeni eşleşme dene</Text>
+              <Text style={styles.noMatchBtnText}>{t('moodIdeas.noMatchBtn')}</Text>
             </Pressable>
           </View>
         )}
@@ -331,13 +345,13 @@ export default function MoodScreen() {
           <View style={styles.historyCard}>
             <View style={styles.historyHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.historyTitle}>📜 Son mood seçimlerin</Text>
+                <Text style={styles.historyTitle}>{t('moodIdeas.historyTitle')}</Text>
                 <Text style={styles.historySub}>
-                  {history.length} fikir kopyalandı — temaya göre takip
+                  {t('moodIdeas.historySub', { count: history.length })}
                 </Text>
               </View>
               <Pressable onPress={onClearHistory} hitSlop={8}>
-                <Text style={styles.historyClearBtn}>Temizle</Text>
+                <Text style={styles.historyClearBtn}>{t('moodIdeas.historyClear')}</Text>
               </Pressable>
             </View>
             {history.slice(0, 6).map((h, idx) => {
@@ -352,7 +366,7 @@ export default function MoodScreen() {
                   <Text style={styles.historyEmoji}>{moodProfile.emoji}</Text>
                   <Text style={styles.historyText} numberOfLines={2}>{h.idea}</Text>
                   <Text style={styles.historyDate}>
-                    {timeAgo(h.pickedAt)}
+                    {timeAgo(h.pickedAt, t)}
                   </Text>
                 </Pressable>
               );
@@ -361,14 +375,14 @@ export default function MoodScreen() {
         )}
 
         <View style={styles.legendCard}>
-          <Text style={styles.legendTitle}>🎨 Mood rehberi</Text>
+          <Text style={styles.legendTitle}>{t('moodIdeas.legendTitle')}</Text>
           <View style={styles.legendGrid}>
             {MOODS.map((m) => (
               <View key={`legend-${m.id}`} style={[styles.legendItem, { borderColor: m.color }]}>
                 <Text style={styles.legendEmoji}>{m.emoji}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.legendLabel, { color: m.color }]}>{m.label}</Text>
-                  <Text style={styles.legendText} numberOfLines={1}>{m.tagline}</Text>
+                  <Text style={[styles.legendLabel, { color: m.color }]}>{moodLabel(m.id)}</Text>
+                  <Text style={styles.legendText} numberOfLines={1}>{moodTagline(m.id)}</Text>
                 </View>
               </View>
             ))}
@@ -379,24 +393,17 @@ export default function MoodScreen() {
   );
 }
 
-const AlertClearHistory = (onYes: () => void) => {
-  Alert.alert('Geçmişi temizle', 'Tüm mood seçimlerin silinecek. Emin misin?', [
-    { text: 'Vazgeç', style: 'cancel' },
-    { text: 'Temizle', style: 'destructive', onPress: onYes },
-  ]);
-};
-
-const timeAgo = (ts: number): string => {
+const timeAgo = (ts: number, t: (k: string, o?: any) => string): string => {
   const diff = Date.now() - ts;
   const min = Math.floor(diff / 60000);
-  if (min < 1) return 'şimdi';
-  if (min < 60) return `${min}dk`;
+  if (min < 1) return t('moodIdeas.timeNow');
+  if (min < 60) return t('moodIdeas.timeMin', { m: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}sa`;
+  if (hr < 24) return t('moodIdeas.timeHour', { h: hr });
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}g`;
+  if (day < 7) return t('moodIdeas.timeDay', { d: day });
   const w = Math.floor(day / 7);
-  return `${w}h`;
+  return t('moodIdeas.timeWeek', { w });
 };
 
 const styles = StyleSheet.create({

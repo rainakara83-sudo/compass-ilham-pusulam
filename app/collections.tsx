@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   COLLECTION_COLORS,
   IdeaCollection,
@@ -27,6 +28,7 @@ import {
 export default function CollectionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [collections, setCollections] = useState<IdeaCollection[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -54,7 +56,7 @@ export default function CollectionsScreen() {
   const onCreate = async () => {
     const trimmed = draftName.trim();
     if (trimmed.length === 0) {
-      Alert.alert('İsim gerekli', 'Lütfen koleksiyona bir isim ver.');
+      Alert.alert(t('collections.alertNameTitle'), t('collections.alertNameBody'));
       return;
     }
     await createCollection(trimmed, draftDesc.trim() || undefined, draftColor);
@@ -67,12 +69,12 @@ export default function CollectionsScreen() {
 
   const onDelete = (col: IdeaCollection) => {
     Alert.alert(
-      'Koleksiyonu sil',
-      `“${col.name}” ve içindeki ${col.ideas.length} fikir bağlantısı silinsin mi?`,
+      t('collections.alertDeleteTitle'),
+      t('collections.alertDeleteBody', { packName: col.name, count: col.ideas.length }),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('collections.alertDeleteCancel'), style: 'cancel' },
         {
-          text: 'Sil',
+          text: t('collections.alertDeleteConfirm'),
           style: 'destructive',
           onPress: async () => {
             const next = await deleteCollection(col.id);
@@ -96,7 +98,7 @@ export default function CollectionsScreen() {
     if (!editTarget) return;
     const trimmed = editName.trim();
     if (trimmed.length === 0) {
-      Alert.alert('İsim gerekli', 'Koleksiyon ismi boş olamaz.');
+      Alert.alert(t('collections.alertNameTitle'), t('collections.alertNameBody'));
       return;
     }
     const next = await updateCollection(editTarget.id, {
@@ -143,32 +145,32 @@ export default function CollectionsScreen() {
 
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Geri</Text>
+          <Text style={styles.backTxt}>{t('collections.back')}</Text>
         </Pressable>
-        <Text style={styles.title}>📚 Fikir Paketleri</Text>
+        <Text style={styles.title}>{t('collections.title')}</Text>
         <Pressable onPress={() => setShowAdd(true)} style={styles.addBtn}>
-          <Text style={styles.addTxt}>+ Yeni</Text>
+          <Text style={styles.addTxt}>{t('collections.newBtn')}</Text>
         </Pressable>
       </View>
 
       <Text style={styles.subtitle}>
-        Fikirlerini kendi koleksiyonlarına grupla. “Haftalık Seri”, “Lansman”, “Eğitim” gibi.
+        {t('collections.subtitle')}
       </Text>
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
           <Text style={styles.statNum}>{collections.length}</Text>
-          <Text style={styles.statLbl}>paket</Text>
+          <Text style={styles.statLbl}>{t('collections.statPacks')}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statNum}>{totalIdeas}</Text>
-          <Text style={styles.statLbl}>fikir</Text>
+          <Text style={styles.statLbl}>{t('collections.statIdeas')}</Text>
         </View>
         <View style={styles.statBox}>
           <Text style={styles.statNum}>
             {collections.length > 0 ? Math.round((totalIdeas / collections.length) * 10) / 10 : 0}
           </Text>
-          <Text style={styles.statLbl}>ortalama</Text>
+          <Text style={styles.statLbl}>{t('collections.statAvg')}</Text>
         </View>
       </View>
 
@@ -179,12 +181,12 @@ export default function CollectionsScreen() {
         {collections.length === 0 ? (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyIcon}>📂</Text>
-            <Text style={styles.emptyTitle}>Henüz paket yok</Text>
+            <Text style={styles.emptyTitle}>{t('collections.emptyTitle')}</Text>
             <Text style={styles.emptyDesc}>
-              Fikirlerini organize etmek için bir koleksiyon oluştur.
+              {t('collections.emptyBody')}
             </Text>
             <Pressable onPress={() => setShowAdd(true)} style={styles.emptyBtn}>
-              <Text style={styles.emptyBtnTxt}>+ İlk paketini oluştur</Text>
+              <Text style={styles.emptyBtnTxt}>{t('collections.emptyBtn')}</Text>
             </Pressable>
           </View>
         ) : (
@@ -200,7 +202,7 @@ export default function CollectionsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.colName}>{col.name}</Text>
                     {col.description && <Text style={styles.colDesc}>{col.description}</Text>}
-                    <Text style={styles.colMeta}>{col.ideas.length} fikir</Text>
+                    <Text style={styles.colMeta}>{t('collections.ideasCount', { count: col.ideas.length })}</Text>
                   </View>
                   <Text style={styles.colChev}>{isExpanded ? '▾' : '▸'}</Text>
                 </Pressable>
@@ -209,20 +211,20 @@ export default function CollectionsScreen() {
                   <View style={styles.colBody}>
                     <View style={styles.colActions}>
                       <Pressable onPress={() => openEdit(col)} style={styles.colActionBtn}>
-                        <Text style={styles.colActionTxt}>✏️ Düzenle</Text>
+                        <Text style={styles.colActionTxt}>{t('collections.editBtn')}</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => onDelete(col)}
                         style={[styles.colActionBtn, styles.colActionDel]}
                       >
-                        <Text style={[styles.colActionTxt, styles.colActionDelTxt]}>🗑 Sil</Text>
+                        <Text style={[styles.colActionTxt, styles.colActionDelTxt]}>{t('collections.deleteBtn')}</Text>
                       </Pressable>
                     </View>
 
-                    <AddIdeaInline onAdd={(t) => onAddIdea(col, t)} />
+                    <AddIdeaInline onAdd={(tx) => onAddIdea(col, tx)} />
 
                     {col.ideas.length === 0 ? (
-                      <Text style={styles.colEmpty}>Bu pakette henüz fikir yok.</Text>
+                      <Text style={styles.colEmpty}>{t('collections.packEmpty')}</Text>
                     ) : (
                       col.ideas.map((idea, idx) => {
                         const isCopied = copiedIdea === idea;
@@ -260,11 +262,11 @@ export default function CollectionsScreen() {
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Yeni paket</Text>
+            <Text style={styles.modalTitle}>{t('collections.newPackTitle')}</Text>
             <TextInput
               value={draftName}
               onChangeText={setDraftName}
-              placeholder="örn: Haftalık Seri"
+              placeholder={t('collections.newPackPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={styles.modalInput}
               maxLength={40}
@@ -273,13 +275,13 @@ export default function CollectionsScreen() {
             <TextInput
               value={draftDesc}
               onChangeText={setDraftDesc}
-              placeholder="Açıklama (opsiyonel)"
+              placeholder={t('collections.newPackDescPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={[styles.modalInput, { marginTop: 8, minHeight: 60 }]}
               maxLength={120}
               multiline
             />
-            <Text style={styles.modalLabel}>Renk</Text>
+            <Text style={styles.modalLabel}>{t('collections.colorLabel')}</Text>
             <View style={styles.colorRow}>
               {COLLECTION_COLORS.map((c) => (
                 <Pressable
@@ -298,10 +300,10 @@ export default function CollectionsScreen() {
                 onPress={() => setShowAdd(false)}
                 style={[styles.modalBtn, styles.modalBtnCancel]}
               >
-                <Text style={styles.modalBtnCancelTxt}>Vazgeç</Text>
+                <Text style={styles.modalBtnCancelTxt}>{t('collections.cancel')}</Text>
               </Pressable>
               <Pressable onPress={onCreate} style={[styles.modalBtn, styles.modalBtnSave]}>
-                <Text style={styles.modalBtnSaveTxt}>Oluştur</Text>
+                <Text style={styles.modalBtnSaveTxt}>{t('collections.create')}</Text>
               </Pressable>
             </View>
           </View>
@@ -311,11 +313,11 @@ export default function CollectionsScreen() {
       <Modal visible={showEdit} animationType="slide" transparent onRequestClose={() => setShowEdit(false)}>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Paketi düzenle</Text>
+            <Text style={styles.modalTitle}>{t('collections.editPackTitle')}</Text>
             <TextInput
               value={editName}
               onChangeText={setEditName}
-              placeholder="Paket adı"
+              placeholder={t('collections.editPackPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={styles.modalInput}
               maxLength={40}
@@ -323,13 +325,13 @@ export default function CollectionsScreen() {
             <TextInput
               value={editDesc}
               onChangeText={setEditDesc}
-              placeholder="Açıklama (opsiyonel)"
+              placeholder={t('collections.newPackDescPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={[styles.modalInput, { marginTop: 8, minHeight: 60 }]}
               maxLength={120}
               multiline
             />
-            <Text style={styles.modalLabel}>Renk</Text>
+            <Text style={styles.modalLabel}>{t('collections.colorLabel')}</Text>
             <View style={styles.colorRow}>
               {COLLECTION_COLORS.map((c) => (
                 <Pressable
@@ -348,10 +350,10 @@ export default function CollectionsScreen() {
                 onPress={() => setShowEdit(false)}
                 style={[styles.modalBtn, styles.modalBtnCancel]}
               >
-                <Text style={styles.modalBtnCancelTxt}>Vazgeç</Text>
+                <Text style={styles.modalBtnCancelTxt}>{t('collections.cancel')}</Text>
               </Pressable>
               <Pressable onPress={onSaveEdit} style={[styles.modalBtn, styles.modalBtnSave]}>
-                <Text style={styles.modalBtnSaveTxt}>Kaydet</Text>
+                <Text style={styles.modalBtnSaveTxt}>{t('collections.save')}</Text>
               </Pressable>
             </View>
           </View>
@@ -362,13 +364,14 @@ export default function CollectionsScreen() {
 }
 
 const AddIdeaInline: React.FC<{ onAdd: (text: string) => void }> = ({ onAdd }) => {
+  const { t } = useTranslation();
   const [val, setVal] = useState('');
   return (
     <View style={styles.addInline}>
       <TextInput
         value={val}
         onChangeText={setVal}
-        placeholder="Paketin içine fikir ekle…"
+        placeholder={t('collections.addIdeaPlaceholder')}
         placeholderTextColor="#9CA3AF"
         style={styles.addInlineInput}
         maxLength={140}

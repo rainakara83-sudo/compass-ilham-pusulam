@@ -9,6 +9,7 @@ eas-build/
 .env
 .env.local
 .env.*.local
+services/directAIService.ts
 
 npm-debug.*
 *.jks

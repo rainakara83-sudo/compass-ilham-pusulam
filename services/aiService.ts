@@ -1,169 +1,46 @@
-import { WeeklyIdea, NicheId, pickWeeklyIdeasFromPool, pickRandomFromPool, isWeekend, getNichePool } from './contentService';
+import { WeeklyIdea, NicheId, pickWeeklyIdeasFromPool, isWeekend, getNichePool } from './contentService';
+import { getSmartPoolIdea, getSmartPoolVariants, getSmartPoolResponse, SmartPoolTask } from './smartPoolService';
+import { callClaudeDirect, callClaudeDirectRetry, isDirectAIConfigured, DirectLang } from './directAIService';
+import i18n from '../i18n';
 
-const RAW_PROXY_URL =
-  (typeof process !== 'undefined' && process.env && process.env.EXPO_PUBLIC_AI_PROXY_URL) || '';
-
-const FALLBACK_PROXY_URL = 'https://compassv4fixed3.vercel.app/api/ask';
-
-const PROXY_URL = RAW_PROXY_URL && !RAW_PROXY_URL.includes('YOUR_BACKEND_URL')
-  ? RAW_PROXY_URL
-  : FALLBACK_PROXY_URL;
-
-export const isAIBackendConfigured = (): boolean => PROXY_URL.length > 0;
-
-const DEFAULT_TIMEOUT_MS = 15000;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 5;
-
-let lastCalls: number[] = [];
-
-const withinRateLimit = (): boolean => {
-  const now = Date.now();
-  lastCalls = lastCalls.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (lastCalls.length >= RATE_LIMIT_MAX) return false;
-  lastCalls.push(now);
-  return true;
+const currentLang = (): DirectLang => {
+  const l = (i18n.language || 'en').split('-')[0];
+  if (l === 'tr' || l === 'en' || l === 'es' || l === 'de' || l === 'fr') return l;
+  return 'en';
 };
 
-const fetchWithTimeout = async (
-  url: string,
-  options: RequestInit,
-  timeoutMs: number
-): Promise<Response> => {
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
+export const isPoolFallbackAvailable = (): boolean => currentLang() === 'tr';
+
+export type CallAIResult = {
+  source: 'ai' | 'pool' | 'failed';
+  text: string;
+  usedFallback: boolean;
+};
+
+export const callAI = async (
+  task: SmartPoolTask,
+  niche: NicheId,
+  lang?: DirectLang,
+  extra?: string
+): Promise<CallAIResult> => {
+  const lng = lang ?? currentLang();
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(t);
-  }
-};
-
-export type AskParams = {
-  niche: NicheId;
-  question: string;
-  history?: { role: 'user' | 'assistant'; content: string }[];
-};
-
-export type AskResult = {
-  answer: string;
-};
-
-export const askAI = async ({ niche, question, history = [] }: AskParams): Promise<AskResult> => {
-  if (!PROXY_URL) {
-    return {
-      answer:
-        'AI bağlantısı yapılandırılmamış. Lütfen .env dosyasına geçerli bir EXPO_PUBLIC_AI_PROXY_URL ekleyin ve uygulamayı yeniden başlatın.',
-    };
-  }
-  if (!withinRateLimit()) {
-    return { answer: 'Çok sık istek gönderiyorsun. Lütfen 1 dakika sonra tekrar dene.' };
-  }
-  try {
-    const res = await fetchWithTimeout(
-      PROXY_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ niche, question, history }),
-      },
-      DEFAULT_TIMEOUT_MS
-    );
-
-    if (!res.ok) {
-      return { answer: `Şu an cevap veremiyorum (HTTP ${res.status}). Lütfen tekrar dene.` };
-    }
-
-    const data = await res.json();
-    return { answer: data.answer ?? '' };
+    const text = await callClaudeDirectRetry(task as any, niche, lng, extra, 2);
+    return { source: 'ai', text, usedFallback: false };
   } catch (e: any) {
-    if (e?.name === 'AbortError') {
-      return { answer: 'İstek zaman aşımına uğradı. Backend yanıt vermiyor olabilir.' };
+    console.error('=== CALL AI FALLBACK ===');
+    console.error('Direct AI failed:', e?.message);
+    console.warn('Falling back to smart pool');
+    if (lng === 'tr') {
+      return { source: 'pool', text: getSmartPoolIdea(niche, task, extra), usedFallback: true };
     }
-    console.warn('askAI error', e);
-    return {
-      answer: `Bağlantı hatası: ${e?.message ?? 'bilinmeyen hata'}. Backend URL'sini kontrol edin.`,
-    };
+    return { source: 'failed', text: '', usedFallback: false };
   }
 };
 
-type PromptVariant = {
-  id: string;
-  label: string;
-  build: (niche: NicheId, original?: string) => Record<string, unknown>;
-};
-
-const WEEKLY_PROMPTS: PromptVariant[] = [
-  {
-    id: 'detailed',
-    label: 'Detaylı brief',
-    build: (niche) => ({
-      task: 'generate_weekly_ideas',
-      style: 'detailed',
-      niche,
-      count: 3,
-      locale: 'tr-TR',
-    }),
-  },
-  {
-    id: 'short',
-    label: 'Kısa brief',
-    build: (niche) => ({
-      task: 'weekly_ideas',
-      niche,
-      count: 3,
-    }),
-  },
-  {
-    id: 'minimal',
-    label: 'Minimal istek',
-    build: (niche) => ({
-      niche,
-      ideas: 3,
-    }),
-  },
-];
-
-const tryOnePrompt = async (variant: PromptVariant, niche: NicheId): Promise<string[] | null> => {
-  if (!PROXY_URL) return null;
-  if (!withinRateLimit()) return null;
-  try {
-    const res = await fetchWithTimeout(
-      PROXY_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(variant.build(niche)),
-      },
-      DEFAULT_TIMEOUT_MS
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const ideas = extractIdeas(data);
-    return ideas.length > 0 ? ideas : null;
-  } catch (e) {
-    console.warn(`AI prompt "${variant.id}" başarısız`, e);
-    return null;
-  }
-};
-
-const extractIdeas = (data: unknown): string[] => {
-  if (!data || typeof data !== 'object') return [];
-  const d = data as Record<string, unknown>;
-  if (Array.isArray(d.ideas)) {
-    return d.ideas.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
-  }
-  if (Array.isArray(d.suggestions)) {
-    return d.suggestions.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
-  }
-  if (typeof d.idea === 'string' && d.idea.trim().length > 0) return [d.idea];
-  if (typeof d.text === 'string' && d.text.trim().length > 0) return [d.text];
-  return [];
-};
-
-export type AIGenerateResult = {
+export type WeekIdeaResult = {
   ideas: WeeklyIdea[];
-  usedVariant: 'detailed' | 'short' | 'minimal' | 'fallback' | null;
+  usedVariant: 'ai' | 'pool';
   fallbackUsed: boolean;
 };
 
@@ -178,157 +55,126 @@ export const generateWeeklyIdeasWithAI = async (
 export const generateWeeklyIdeasWithAIResult = async (
   niche: NicheId,
   exclude: string[] = []
-): Promise<AIGenerateResult> => {
-  for (const variant of WEEKLY_PROMPTS) {
-    const ideas = await tryOnePrompt(variant, niche);
-    if (ideas && ideas.length > 0) {
+): Promise<WeekIdeaResult> => {
+  if (isDirectAIConfigured()) {
+    try {
+      const lng = currentLang();
+      const raw = await callClaudeDirectRetry('generate_weekly_ideas', niche, lng, undefined, 2);
+      const lines = raw
+        .split('\n')
+        .map((l) => l.replace(/^[\s\-\d\.\)\*]+/, '').trim())
+        .filter((l) => l.length > 8)
+        .slice(0, 5);
+      const fallbackPool = lines.length >= 3 ? lines : [];
+      const pool = fallbackPool.length > 0 ? fallbackPool : getNichePool(niche);
+      const recent = exclude.slice(0, 5);
+      const usedSet = new Set(recent);
+      const out: string[] = [];
+      const poolCopy = [...pool];
+      while (out.length < 5 && poolCopy.length > 0) {
+        const idx = Math.floor(Math.random() * poolCopy.length);
+        const candidate = poolCopy[idx];
+        poolCopy.splice(idx, 1);
+        if (!usedSet.has(candidate)) out.push(candidate);
+      }
+      if (out.length < 5) {
+        const remaining = (fallbackPool.length > 0 ? fallbackPool : getNichePool(niche)).filter((p) => !out.includes(p));
+        while (out.length < 5 && remaining.length > 0) {
+          const idx = Math.floor(Math.random() * remaining.length);
+          out.push(remaining[idx]);
+          remaining.splice(idx, 1);
+        }
+      }
       const days: WeeklyIdea['day'][] = isWeekend()
         ? ['monday', 'wednesday', 'friday', 'saturday']
-        : ['monday', 'wednesday', 'friday'];
-      const filtered = exclude.length > 0 ? ideas.filter((t) => !exclude.includes(t)) : ideas;
-      const final = (filtered.length > 0 ? filtered : ideas).slice(0, days.length);
+        : ['monday', 'wednesday', 'friday', 'saturday'];
       return {
-        ideas: final.map((text, idx) => ({
+        ideas: out.slice(0, days.length).map((text, idx) => ({
           day: days[idx] ?? 'monday',
           text,
           source: 'ai' as const,
         })),
-        usedVariant: variant.id as 'detailed' | 'short' | 'minimal',
+        usedVariant: 'ai',
         fallbackUsed: false,
       };
+    } catch (e: any) {
+      console.error('=== CALL AI FALLBACK ===');
+      console.error('Direct AI weekly ideas failed:', e?.message);
+      console.warn('Falling back to smart pool');
     }
   }
-  const fallback = smartPoolFallback(niche, exclude);
+
+  if (currentLang() !== 'tr') {
+    const days: WeeklyIdea['day'][] = isWeekend()
+      ? ['monday', 'wednesday', 'friday', 'saturday']
+      : ['monday', 'wednesday', 'friday', 'saturday'];
+    return {
+      ideas: days.map((d) => ({ day: d, text: '', source: 'ai' as const })),
+      usedVariant: 'pool',
+      fallbackUsed: true,
+    };
+  }
+
+  const pool = getNichePool(niche);
+  const recent = exclude.slice(0, 5);
+  const usedSet = new Set(recent);
+  const out: string[] = [];
+  const poolCopy = [...pool];
+  while (out.length < 5 && poolCopy.length > 0) {
+    const idx = Math.floor(Math.random() * poolCopy.length);
+    const candidate = poolCopy[idx];
+    poolCopy.splice(idx, 1);
+    if (!usedSet.has(candidate)) out.push(candidate);
+  }
+  const days: WeeklyIdea['day'][] = isWeekend()
+    ? ['monday', 'wednesday', 'friday', 'saturday']
+    : ['monday', 'wednesday', 'friday', 'saturday'];
   return {
-    ideas: fallback,
-    usedVariant: 'fallback',
-    fallbackUsed: true,
+    ideas: out.slice(0, days.length).map((text, idx) => ({
+      day: days[idx] ?? 'monday',
+      text,
+      source: 'ai' as const,
+    })),
+    usedVariant: 'pool',
+    fallbackUsed: false,
   };
 };
-
-const smartPoolFallback = (niche: NicheId, exclude: string[]): WeeklyIdea[] => {
-  const base = pickWeeklyIdeasFromPool(niche, isWeekend());
-  if (exclude.length === 0) return base;
-  const days: WeeklyIdea['day'][] = ['monday', 'wednesday', 'friday', 'saturday'];
-  const result: WeeklyIdea[] = [];
-  let dayIdx = 0;
-  for (const idea of base) {
-    if (!exclude.includes(idea.text)) {
-      result.push(idea);
-      dayIdx += 1;
-    }
-  }
-  if (result.length < base.length) {
-    const usedSet = new Set([...exclude, ...result.map((r) => r.text)]);
-    while (result.length < base.length) {
-      const next = pickRandomFromPool(niche, Array.from(usedSet));
-      if (!next) break;
-      result.push({ day: days[dayIdx] ?? 'monday', text: next, source: 'pool' });
-      usedSet.add(next);
-      dayIdx += 1;
-    }
-  }
-  return result;
-};
-
-export const getRateLimitInfo = () => {
-  const now = Date.now();
-  lastCalls = lastCalls.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  return {
-    remaining: Math.max(0, RATE_LIMIT_MAX - lastCalls.length),
-    limit: RATE_LIMIT_MAX,
-    windowMs: RATE_LIMIT_WINDOW_MS,
-  };
-};
-
-export const getAIPromptVariants = () => WEEKLY_PROMPTS.map((p) => ({ id: p.id, label: p.label }));
 
 export type IdeaVariantResult = {
   variants: string[];
   usedFallback: boolean;
 };
 
-const VARIANT_PROMPTS: PromptVariant[] = [
-  {
-    id: 'detailed',
-    label: 'Detaylı brief',
-    build: (niche, original) => ({
-      task: 'generate_idea_variants',
-      style: 'detailed',
-      niche,
-      original,
-      count: 3,
-      locale: 'tr-TR',
-    }),
-  },
-  {
-    id: 'short',
-    label: 'Kısa brief',
-    build: (niche, original) => ({
-      task: 'idea_variants',
-      niche,
-      original,
-      count: 3,
-    }),
-  },
-  {
-    id: 'minimal',
-    label: 'Minimal istek',
-    build: (niche, original) => ({
-      niche,
-      rephrase: original,
-      variants: 3,
-    }),
-  },
-];
-
-const tryVariantPrompt = async (variant: PromptVariant, niche: NicheId, original: string): Promise<string[] | null> => {
-  if (!PROXY_URL) return null;
-  if (!withinRateLimit()) return null;
-  try {
-    const res = await fetchWithTimeout(
-      PROXY_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(variant.build(niche, original)),
-      },
-      DEFAULT_TIMEOUT_MS
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const ideas = extractIdeas(data);
-    return ideas.length > 0 ? ideas : null;
-  } catch (e) {
-    console.warn(`Variant prompt "${variant.id}" başarısız`, e);
-    return null;
-  }
-};
-
-const localVariantFallback = (original: string, niche: NicheId): string[] => {
-  const pool = getNichePool(niche).filter((p) => p !== original);
-  const out: string[] = [];
-  for (let i = 0; i < pool.length && out.length < 3; i++) {
-    out.push(pool[i]);
-  }
-  while (out.length < 3) {
-    out.push(`${original} (varyasyon ${out.length + 1})`);
-  }
-  return out;
-};
-
-export const generateIdeaVariants = async (niche: NicheId, original: string): Promise<IdeaVariantResult> => {
+export const generateIdeaVariants = async (
+  niche: NicheId,
+  original: string
+): Promise<IdeaVariantResult> => {
   const clean = original.trim();
   if (clean.length === 0) return { variants: [], usedFallback: true };
-  for (const variant of VARIANT_PROMPTS) {
-    const ideas = await tryVariantPrompt(variant, niche, clean);
-    if (ideas && ideas.length > 0) {
-      const dedup = ideas.filter((v) => v !== clean).slice(0, 3);
-      if (dedup.length === 0) continue;
-      return { variants: dedup, usedFallback: false };
+  if (isDirectAIConfigured()) {
+    try {
+      const lng = currentLang();
+      const raw = await callClaudeDirectRetry('variants', niche, lng, clean, 2);
+      const lines = raw
+        .split('\n')
+        .map((l) => l.replace(/^[\s\-\d\.\)\*]+/, '').trim())
+        .filter((l) => l.length > 8 && l !== clean)
+        .slice(0, 3);
+      if (lines.length > 0) return { variants: lines, usedFallback: false };
+    } catch (e: any) {
+      console.error('=== CALL AI FALLBACK ===');
+      console.error('Direct AI variants failed:', e?.message);
+      console.warn('Falling back to smart pool');
     }
   }
-  return { variants: localVariantFallback(clean, niche), usedFallback: true };
+  if (currentLang() !== 'tr') {
+    return { variants: [], usedFallback: true };
+  }
+  const variants = getSmartPoolVariants(niche, clean, 3);
+  if (variants.length === 0) {
+    return { variants: [`${clean} (varyasyon)`, `${clean} (alternatif)`, `${clean} (yorum)`], usedFallback: true };
+  }
+  return { variants, usedFallback: false };
 };
 
 export type HashtagCategory = 'genel' | 'nis' | 'uzun' | 'trend';
@@ -341,88 +187,6 @@ export type HashtagItem = {
 export type HashtagResult = {
   hashtags: HashtagItem[];
   usedFallback: boolean;
-};
-
-const HASHTAG_PROMPTS: PromptVariant[] = [
-  {
-    id: 'detailed',
-    label: 'Detaylı brief',
-    build: (niche, original) => ({
-      task: 'generate_hashtags',
-      style: 'detailed',
-      niche,
-      original,
-      count: 15,
-      locale: 'tr-TR',
-    }),
-  },
-  {
-    id: 'short',
-    label: 'Kısa brief',
-    build: (niche, original) => ({
-      task: 'hashtags',
-      niche,
-      original,
-      count: 15,
-    }),
-  },
-  {
-    id: 'minimal',
-    label: 'Minimal istek',
-    build: (niche, original) => ({
-      niche,
-      hashtags_for: original,
-      count: 15,
-    }),
-  },
-];
-
-const tryHashtagPrompt = async (variant: PromptVariant, niche: NicheId, original: string): Promise<HashtagItem[] | null> => {
-  if (!PROXY_URL) return null;
-  if (!withinRateLimit()) return null;
-  try {
-    const res = await fetchWithTimeout(
-      PROXY_URL,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(variant.build(niche, original)),
-      },
-      DEFAULT_TIMEOUT_MS
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return extractHashtags(data);
-  } catch (e) {
-    console.warn(`Hashtag prompt "${variant.id}" başarısız`, e);
-    return null;
-  }
-};
-
-const extractHashtags = (data: unknown): HashtagItem[] => {
-  if (!data || typeof data !== 'object') return [];
-  const d = data as Record<string, unknown>;
-  const candidates: unknown[] = [];
-  if (Array.isArray(d.hashtags)) candidates.push(...d.hashtags);
-  if (Array.isArray(d.tags)) candidates.push(...d.tags);
-  const out: HashtagItem[] = [];
-  for (const item of candidates) {
-    if (typeof item === 'string') {
-      const clean = normalizeTag(item);
-      if (clean) out.push({ tag: clean, category: categorize(clean) });
-    } else if (item && typeof item === 'object') {
-      const obj = item as Record<string, unknown>;
-      const raw = typeof obj.tag === 'string' ? obj.tag : typeof obj.text === 'string' ? obj.text : '';
-      const clean = normalizeTag(raw);
-      if (clean) {
-        const cat = typeof obj.category === 'string' && ['genel', 'nis', 'uzun', 'trend'].includes(obj.category)
-          ? (obj.category as HashtagCategory)
-          : categorize(clean);
-        out.push({ tag: clean, category: cat });
-      }
-    }
-  }
-  return out;
 };
 
 export const normalizeTag = (raw: string): string => {
@@ -441,71 +205,155 @@ export const categorize = (tag: string): HashtagCategory => {
   return 'nis';
 };
 
-const localHashtagFallback = (original: string, niche: NicheId): HashtagItem[] => {
-  const tokens = original
+const localeHashtagsTr: Record<NicheId, string[]> = {
+  fitness: ['fitness', 'fitnessmotivation', 'workout', 'gym', 'saglikliyasam', 'spor', 'evdetrainman', 'mobilite', 'kardiyo', 'yoga', 'protein', 'kas', 'fitkadin', 'fitbaba', 'vucutgelistirme', 'fonksiyonelantrenman', 'sagliklibeslenme', 'kilo', 'stretching', 'gundelikrutin'],
+  food: ['yemek', 'tarif', 'lezzet', 'mutfak', 'pratikyemek', 'kolaytarif', 'kahvalti', 'evdeyemek', 'tatlitarifleri', 'sagliklibeslenme', 'vegan', 'glutensiz', 'gurme', 'restorankultur', 'iftar', 'pratik', 'pratikmenu', 'tatli', 'corba', 'salata', 'fitmenu'],
+  tech: ['teknoloji', 'yazilim', 'yapayzeka', 'ai', 'kodlama', 'javascript', 'python', 'webgelistirme', 'mobiluygulama', 'cloud', 'siber', 'startup', 'apple', 'android', 'bilgisayar', 'donanim', 'iot', 'blockchain', 'veribilimi', 'kod'],
+  fashion: ['moda', 'stil', 'kombin', 'kombinönerileri', 'trend', 'kıyafet', 'aksesuar', 'modadunyasi', 'streetstyle', 'ootd', 'vintage', 'modedernegi', 'kişiselstil', 'capsulewardrobe', 'basic', 'yazmodasi', 'kismodasi', 'sonbaharstil', 'baharstil', 'elbise'],
+  travel: ['seyahat', 'gezi', 'tatil', 'seyahatnotlari', 'gezgin', 'backpacker', 'rota', 'tatilrotalari', 'dunyanin', 'kulturelseyahat', 'dogayeri', 'kamp', 'plaj', 'kayak', 'dalis', 'adventure', 'roadtrip', 'turkiyegezisi', 'avruparotasi', 'uzaktoluyuz', 'rotaönerileri'],
+  gaming: ['oyun', 'gaming', 'yayinci', 'streamer', 'twitch', 'youtube', 'espor', 'valorant', 'lol', 'csgo', 'cs2', 'pubg', 'minecraft', 'roblox', 'konsol', 'playstation', 'xbox', 'nintendo', 'oyuninceleme', 'gamergirl'],
+  personal_dev: ['kisigelisim', 'uretkenlik', 'alışkanlık', 'kitap', 'kitapönerileri', 'motivasyon', 'hedef', 'rutin', 'sabahrutini', 'hayat', 'vizyon', 'zihniyet', 'mindset', 'notdefteri', 'planlama', 'zamanayönetimi', 'derinodak', 'flow', 'kisiselgelisim', 'disiplin', 'okumalar'],
+  beauty: ['makyaj', 'ciltbakim', 'sacbakim', 'guzellik', 'kozmetik', 'cilt', 'nemlendirici', 'serum', 'fondöten', 'maskara', 'ruj', 'gunesbakimi', 'akne', 'dermatoloji', 'skincare', 'makeup', 'guzellikrutin', 'ciltbakimrutini', 'dogalkozmetik', 'kendinyap'],
+  astrology: ['astroloji', 'burç', 'burçyorumu', 'yükselen', 'ayburcu', 'venüs', 'mars', 'merkur', 'satürn', 'karmik', 'tarot', 'ruh', 'enerji', 'gezegen', 'burçuyumlusu', 'günlukburç', 'haftalıkburç', 'ayburcuyorumu', 'astroloji', 'dogumharitasi'],
+};
+
+const localeHashtagsEn: Record<NicheId, string[]> = {
+  fitness: ['fitness', 'fitnessmotivation', 'workout', 'gym', 'healthylifestyle', 'sport', 'homeworkout', 'mobility', 'cardio', 'yoga', 'protein', 'muscle', 'fitfam', 'bodybuilding', 'functionalfitness', 'nutrition', 'weightloss', 'stretching', 'dailyroutine'],
+  food: ['food', 'recipe', 'cooking', 'kitchen', 'easyrecipe', 'quickmeal', 'breakfast', 'homecooking', 'dessert', 'healthyeating', 'vegan', 'glutenfree', 'gourmet', 'foodie', 'mealprep', 'tasty', 'soup', 'salad', 'fitfood'],
+  tech: ['technology', 'software', 'ai', 'coding', 'javascript', 'python', 'webdev', 'mobileapp', 'cloud', 'cyber', 'startup', 'apple', 'android', 'computer', 'hardware', 'iot', 'blockchain', 'datascience', 'code'],
+  fashion: ['fashion', 'style', 'outfit', 'ootd', 'trend', 'clothing', 'accessories', 'streetstyle', 'vintage', 'minimalist', 'capsulewardrobe', 'basics', 'summerstyle', 'winterstyle', 'autumnstyle', 'springstyle', 'dress'],
+  travel: ['travel', 'trip', 'vacation', 'travelgram', 'wanderlust', 'backpacker', 'route', 'adventure', 'explore', 'culturaltravel', 'nature', 'camping', 'beach', 'ski', 'diving', 'roadtrip', 'europetravel', 'hiddengems'],
+  gaming: ['gaming', 'gamer', 'streamer', 'twitch', 'youtube', 'esports', 'valorant', 'lol', 'csgo', 'cs2', 'pubg', 'minecraft', 'roblox', 'console', 'playstation', 'xbox', 'nintendo', 'gamereview', 'gamergirl'],
+  personal_dev: ['personaldevelopment', 'productivity', 'habit', 'book', 'bookrecommendation', 'motivation', 'goal', 'routine', 'morningroutine', 'life', 'vision', 'mindset', 'journal', 'planning', 'timemanagement', 'deepwork', 'flow', 'discipline', 'reading'],
+  beauty: ['makeup', 'skincare', 'haircare', 'beauty', 'cosmetics', 'skin', 'moisturizer', 'serum', 'foundation', 'mascara', 'lipstick', 'sunscreen', 'acne', 'dermatology', 'naturalbeauty', 'diy'],
+  astrology: ['astrology', 'zodiac', 'horoscope', 'rising', 'moon', 'venus', 'mars', 'mercury', 'saturn', 'karmic', 'tarot', 'spirit', 'energy', 'planet', 'compatibility', 'dailyhoroscope', 'weeklyhoroscope', 'birthchart'],
+};
+
+const localeHashtags: Record<DirectLang, Record<NicheId, string[]>> = {
+  tr: localeHashtagsTr,
+  en: localeHashtagsEn,
+  es: localeHashtagsEn,
+  de: localeHashtagsEn,
+  fr: localeHashtagsEn,
+};
+
+export const generateHashtags = async (
+  niche: NicheId,
+  original: string
+): Promise<HashtagResult> => {
+  const clean = original.trim();
+  if (clean.length === 0) return { hashtags: [], usedFallback: true };
+  if (isDirectAIConfigured()) {
+    try {
+      const lng = currentLang();
+      const raw = await callClaudeDirectRetry('hashtags', niche, lng, clean, 2);
+      const tokens = raw
+        .split(/[\s,\n]+/)
+        .map((t) => t.replace(/^[#@]+/, '').trim())
+        .filter((t) => t.length >= 3)
+        .slice(0, 15);
+      const items: HashtagItem[] = [];
+      for (const t of tokens) {
+        const c = normalizeTag(t);
+        if (c) items.push({ tag: c, category: categorize(c) });
+        if (items.length >= 15) break;
+      }
+      if (items.length > 0) return { hashtags: items, usedFallback: false };
+    } catch (e: any) {
+      console.error('=== CALL AI FALLBACK ===');
+      console.error('Direct AI hashtags failed:', e?.message);
+      console.warn('Falling back to smart pool');
+    }
+  }
+  const tokens = clean
     .toLowerCase()
     .replace(/[^\wığüşöç\s]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !['için', 'olarak', 'gibi', 'üzerine', 'hakkında', 'kısa', 'uzun', 'yeni'].includes(w))
-    .slice(0, 5);
-  const nicheSlug = niche.replace(/_/g, '');
+    .filter((w) => w.length >= 4);
   const general: string[] = [
-    `${nicheSlug}`,
-    'icerikuretici',
-    'icerikfikir',
-    'sosyalmedya',
-    'etkilesim',
-    'reels',
-    'instareels',
-    'kesfet',
-    'trend',
-    'turkiye',
-    'marka',
-    'girisimcilik',
-    'icerik',
-    'uretici',
+    'icerikuretici', 'icerikfikir', 'sosyalmedya', 'etkilesim', 'reels', 'instareels',
+    'kesfet', 'trend', 'turkiye', 'marka', 'girisimcilik', 'icerik', 'uretici',
   ];
   const longTail = ['türkçeicerik', 'haftalıkiçerik', 'sosyalmedyaipucu', 'icerikureticitips'];
+  const set = new Set<string>();
   const out: HashtagItem[] = [];
   for (const t of tokens) {
     const c = normalizeTag(t);
-    if (c && !out.some((o) => o.tag === c)) out.push({ tag: c, category: 'uzun' });
+    if (c && !set.has(c)) {
+      set.add(c);
+      out.push({ tag: c, category: 'uzun' });
+    }
   }
   for (const g of general) {
     const c = normalizeTag(g);
-    if (c && !out.some((o) => o.tag === c)) out.push({ tag: c, category: categorize(c) });
-  }
-  for (const l of longTail) {
-    if (!out.some((o) => o.tag === l)) out.push({ tag: l, category: 'uzun' });
-  }
-  return out.slice(0, 15);
-};
-
-export const generateHashtags = async (niche: NicheId, original: string): Promise<HashtagResult> => {
-  const clean = original.trim();
-  if (clean.length === 0) return { hashtags: [], usedFallback: true };
-  for (const variant of HASHTAG_PROMPTS) {
-    const items = await tryHashtagPrompt(variant, niche, clean);
-    if (items && items.length > 0) {
-      const seen = new Set<string>();
-      const dedup: HashtagItem[] = [];
-      for (const it of items) {
-        if (!seen.has(it.tag)) {
-          seen.add(it.tag);
-          dedup.push(it);
-        }
-        if (dedup.length >= 15) break;
-      }
-      if (dedup.length === 0) continue;
-      return { hashtags: dedup, usedFallback: false };
+    if (c && !set.has(c)) {
+      set.add(c);
+      out.push({ tag: c, category: categorize(c) });
     }
   }
-  return { hashtags: localHashtagFallback(clean, niche), usedFallback: true };
+  const localeList = localeHashtags[currentLang()][niche] ?? [];
+  for (const l of localeList) {
+    const c = normalizeTag(l);
+    if (c && !set.has(c)) {
+      set.add(c);
+      out.push({ tag: c, category: categorize(c) });
+    }
+  }
+  for (const l of longTail) {
+    if (!set.has(l)) {
+      set.add(l);
+      out.push({ tag: l, category: 'uzun' });
+    }
+  }
+  return { hashtags: out.slice(0, 15), usedFallback: false };
 };
 
-export const HASHTAG_CATEGORY_META: Record<HashtagCategory, { icon: string; label: string; color: string }> = {
-  genel: { icon: '🌐', label: 'Genel', color: '#4D96FF' },
-  nis: { icon: '🎯', label: 'Niş', color: '#8B5CF6' },
-  uzun: { icon: '📏', label: 'Uzun kuyruk', color: '#10B981' },
-  trend: { icon: '🔥', label: 'Trend', color: '#EF4444' },
+export const HASHTAG_CATEGORY_META: Record<HashtagCategory, { icon: string; label: { tr: string; en: string; es: string; de: string; fr: string }; color: string }> = {
+  genel: { icon: '🌐', label: { tr: 'Genel', en: 'General', es: 'General', de: 'Allgemein', fr: 'Général' }, color: '#4D96FF' },
+  nis: { icon: '🎯', label: { tr: 'Niş', en: 'Niche', es: 'Nicho', de: 'Nische', fr: 'Niche' }, color: '#8B5CF6' },
+  uzun: { icon: '📏', label: { tr: 'Uzun kuyruk', en: 'Long tail', es: 'Cola larga', de: 'Long Tail', fr: 'Longue traîne' }, color: '#10B981' },
+  trend: { icon: '🔥', label: { tr: 'Trend', en: 'Trend', es: 'Tendencia', de: 'Trend', fr: 'Tendance' }, color: '#EF4444' },
 };
+
+export type AskParams = {
+  niche: NicheId;
+  question: string;
+  history?: { role: 'user' | 'assistant'; content: string }[];
+};
+
+export type AskResult = {
+  answer: string;
+};
+
+export const askAI = async ({
+  niche,
+  question,
+  history = [],
+}: AskParams): Promise<AskResult> => {
+  if (isDirectAIConfigured()) {
+    try {
+      const lng = currentLang();
+      const lastUser = history.filter((h) => h.role === 'user').slice(-1)[0]?.content;
+      const ctx = lastUser
+        ? `${niche} nişi. Önceki konuşma — Kullanıcı: ${lastUser}. Yeni soru: ${question}`
+        : `${niche} nişi. Soru: ${question}`;
+      const text = await callClaudeDirectRetry('qa', niche, lng, ctx, 2);
+      return { answer: text || 'Cevap alınamadı.' };
+    } catch (e: any) {
+      console.error('=== CALL AI FALLBACK ===');
+      console.error('Direct AI askAI failed:', e?.message);
+      console.warn('Falling back to smart pool');
+    }
+  }
+  if (currentLang() !== 'tr') {
+    return { answer: '' };
+  }
+  const lastUser = history.filter((h) => h.role === 'user').slice(-1)[0]?.content;
+  const prompt = (lastUser ? `${lastUser} → ${question}` : question).trim();
+  const answer = getSmartPoolResponse(niche, prompt);
+  return { answer };
+};
+
+export const isAIBackendConfigured = (): boolean => isDirectAIConfigured();
+export const getRateLimitInfo = () => ({ remaining: 0, limit: 0, windowMs: 0 });
+export const getAIPromptVariants = () => [] as { id: string; label: string }[];

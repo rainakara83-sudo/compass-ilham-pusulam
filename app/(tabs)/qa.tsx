@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,37 +10,41 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
+import i18n, { getDefaultIdeasByNiche } from '../../i18n';
 import nichesData from '../../data/niches.json';
-import { getIdeaBank, Idea, getStoredNiche } from '../../services/storage';
+import { Idea, getStoredNiche } from '../../services/storage';
 import { NicheId } from '../../services/contentService';
+import { getNicheIdeas } from '../../data/niche-ideas-i18n';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
+
+const formatHeroDate = (d: Date): string => {
+  const lng = (i18n.language || 'en').split('-')[0];
+  try {
+    return new Intl.DateTimeFormat(lng, {
+      day: '2-digit', month: 'long', year: 'numeric',
+    }).format(d);
+  } catch {
+    return d.toDateString();
+  }
+};
 
 const QUOTES = [
-  'Bugün attığın adım, yarınki başarının temeli.',
-  'Tutarlılık, motivasyondan daha güçlüdür.',
-  'Küçük fikirler büyük topluluklar yaratır.',
-  'İlham gelmez — onu sen çağırırsın.',
-  'Paylaşmak için mükemmel olmak zorunda değilsin; gerçek olmak yeter.',
-  'Bir fikri 7 farklı açıdan anlat, her seferinde yeni bir kitle yakala.',
-  'İçeriğin değer ürettiği sürece, zaman seni ödüllendirir.',
-  'Vazgeçmek, hiç başlamamış olmaktan daha kötüdür.',
-  'Soru sormak, cevap vermekten daha güçlü bir hiledir.',
-  'Bugün 1 fikir, yarın 10 içeriğin hammaddesidir.',
-  'Senin nişin küçük olabilir; ama etkin büyük olabilir.',
-  'Topluluk, sık içerik üretenden değil, değer oluşturandan yanında durur.',
+  'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12',
 ];
 
 const NICHES = nichesData as { id: string; icon: string; color: string }[];
 
 const TIPS = [
-  { id: 'fitness', title: 'Hızlı Paylaşım', text: 'Antrenman sonu "ne yaptın?" sorusunu yanıtlayan 1 cümlelik post, en yüksek etkileşimi alır.', emoji: '⚡' },
-  { id: 'food', title: 'Görsel Önce', text: 'Tariflerde önce fotoğrafı, sonra malzemeleri ver. Açlık hissi tıklamayı tetikler.', emoji: '🍴' },
-  { id: 'tech', title: 'Kısa Karşılaştırma', text: '"X mi Y mi?" formatı yorum almayı 2x artırır. Tarafsız kal, izleyici karar versin.', emoji: '⚖️' },
-  { id: 'fashion', title: 'Önce-Sonra', text: 'Aynı kombini 3 farklı ışıkta göster; izleyici "hangisini ben de yapabilirim?" diye sorar.', emoji: '🪞' },
-  { id: 'travel', title: 'Pratik Bilgi', text: 'Gideceğin yerin "kaç para, kaç gün, ne yenir" özetini post olarak ver — rehber formatı tutar.', emoji: '🗺' },
-  { id: 'gaming', title: 'Highlight Önce', text: 'Videonun en heyecanlı 5 saniyesini ilk frame olarak kullan. İzleyici 5 saniye sonra kalır.', emoji: '🎮' },
-  { id: 'personal_dev', title: 'Hatırlanabilir Liste', text: '"3 kitap / 3 alışkanlık / 3 ders" üçlüsü, kitap özetlerinden 3x paylaşılır.', emoji: '📚' },
-  { id: 'beauty', title: 'Öncesiz Sonuç Olmaz', text: '5 saniyelik uygulama öncesi/sonrası, ürün incelemesinden 4x fazla kaydetme alır.', emoji: '✨' },
+  { id: 'fitness', title: 'tipFitness', text: 'tipFitnessTxt', emoji: '⚡' },
+  { id: 'food', title: 'tipFood', text: 'tipFoodTxt', emoji: '🍴' },
+  { id: 'tech', title: 'tipTech', text: 'tipTechTxt', emoji: '⚖️' },
+  { id: 'fashion', title: 'tipFashion', text: 'tipFashionTxt', emoji: '🪞' },
+  { id: 'travel', title: 'tipTravel', text: 'tipTravelTxt', emoji: '🗺' },
+  { id: 'gaming', title: 'tipGaming', text: 'tipGamingTxt', emoji: '🎮' },
+  { id: 'personal_dev', title: 'tipPersonalDev', text: 'tipPersonalDevTxt', emoji: '📚' },
+  { id: 'beauty', title: 'tipBeauty', text: 'tipBeautyTxt', emoji: '✨' },
 ];
 
 const hashSeed = (s: string): number => {
@@ -52,7 +55,8 @@ const hashSeed = (s: string): number => {
 
 export default function InspirationBoardScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n: i18nInstance } = useTranslation();
+  const { isDark } = useTheme();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [query, setQuery] = useState('');
@@ -60,7 +64,7 @@ export default function InspirationBoardScreen() {
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const quoteIdx = hashSeed(todayKey) % QUOTES.length;
-  const todayQuote = QUOTES[quoteIdx];
+  const todayQuote = t(`qa.${QUOTES[quoteIdx]}`);
 
   const fade = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(0.92)).current;
@@ -71,12 +75,47 @@ export default function InspirationBoardScreen() {
       Animated.spring(cardScale, { toValue: 1, friction: 6, useNativeDriver: true }),
     ]).start();
     (async () => {
-      const [bank, storedNiche] = await Promise.all([getIdeaBank(), getStoredNiche()]);
-      setIdeas(bank);
-      setNiche(storedNiche);
+      const storedNiche = await getStoredNiche();
+      const lang = (i18nInstance.language || 'en').split('-')[0] as 'tr' | 'en' | 'de' | 'fr' | 'es';
+      let nicheIdeas: string[] = [];
+      let sourceNiche: NicheId | null = storedNiche;
+      if (storedNiche) {
+        nicheIdeas = getNicheIdeas(storedNiche, lang);
+      }
+      if (nicheIdeas.length === 0) {
+        const fallbackNiche: NicheId = storedNiche ?? 'personal_dev';
+        nicheIdeas = getDefaultIdeasByNiche(fallbackNiche, lang);
+        sourceNiche = fallbackNiche;
+      }
+      console.log('[E3-DIAG] Q&A render', {
+        storedNiche,
+        sourceNiche,
+        lang,
+        nicheIdeasCount: nicheIdeas.length,
+        firstThree: nicheIdeas.slice(0, 3),
+      });
+      const mapped: Idea[] = nicheIdeas.map((text, idx) => ({
+        id: `niche-${sourceNiche}-${idx}`,
+        title: text,
+        description: '',
+        angle: 'tip' as const,
+        status: 'raw' as const,
+        tags: [],
+        hookIdea: '',
+        format: '',
+        estimatedReach: 'medium' as const,
+        priority: 3 as const,
+        notes: '',
+        source: 'trending' as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        usedAt: null,
+      }));
+      setIdeas(mapped);
+      setNiche(sourceNiche);
     })();
     setPlanRefresh((x) => x + 1);
-  }, [cardScale, fade]);
+  }, [cardScale, fade, i18nInstance.language]);
 
   const nicheEntry = NICHES.find((n) => n.id === niche);
   const nicheColor = nicheEntry?.color ?? '#2F3B25';
@@ -108,16 +147,17 @@ export default function InspirationBoardScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: '#5C6B4F' }]}
+      style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]}
       contentContainerStyle={styles.content}
     >
+      <PageHint hintId="qa" title={t('pageHints.qa.title')} description={t('pageHints.qa.desc')} />
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>💡 İlham Panosu</Text>
+            <Text style={styles.title}>{t('qa.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>Günün ilhamı · fikir arama · hızlı ipuçları</Text>
+          <Text style={styles.subtitle}>{t('qa.subtitle')}</Text>
         </View>
         <Pressable onPress={() => router.replace('/(tabs)')} style={styles.closeBtn} hitSlop={8}>
           <Text style={styles.closeBtnText}>✕</Text>
@@ -125,10 +165,10 @@ export default function InspirationBoardScreen() {
       </View>
 
       <Animated.View style={[styles.heroCard, { backgroundColor: pastel, borderColor: nicheColor, opacity: fade, transform: [{ scale: cardScale }] }]}>
-        <Text style={[styles.heroBadge, { color: deep }]}>🌅 GÜNÜN İLHAMI</Text>
+        <Text style={[styles.heroBadge, { color: deep }]}>{t('qa.heroBadge')}</Text>
         <Text style={[styles.heroQuote, { color: deep }]}>"{todayQuote}"</Text>
         <Text style={[styles.heroDate, { color: deep, opacity: 0.7 }]}>
-          {new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' })}
+          {formatHeroDate(new Date())}
         </Text>
         <View style={styles.dotRow}>
           {QUOTES.map((_, i) => (
@@ -141,58 +181,67 @@ export default function InspirationBoardScreen() {
       </Animated.View>
 
       <View style={styles.searchCard}>
-        <Text style={styles.sectionTitle}>🔎 Fikir Ara</Text>
+        <Text style={styles.sectionTitle}>{t('qa.searchTitle')}</Text>
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Fikirlerinde ara... (başlık, etiket, açı)"
+          placeholder={t('qa.searchPlaceholder')}
           placeholderTextColor="#9CA3AF"
           style={[styles.searchInput, { borderColor: nicheColor }]}
         />
         <Text style={styles.searchMeta}>
-          {filtered.length} sonuç{filtered.length !== 1 ? '' : ''} · Toplam {ideas.length} fikir
+          {t('qa.searchMeta', { count: filtered.length, total: ideas.length })}
         </Text>
         {filtered.length === 0 && (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyEmoji}>🔍</Text>
             <Text style={styles.emptyText}>
-              {ideas.length === 0
-                ? 'Henüz fikir bankında içerik yok. Ana sayfada "Akıllı Yenile" ile üret, sonra burada ara.'
-                : 'Aramayla eşleşen fikir bulunamadı. Farklı bir kelime dene.'}
+              {ideas.length === 0 ? t('qa.emptyBank') : t('qa.emptyNoMatch')}
             </Text>
             <Pressable onPress={() => router.push('/idea-bank')} style={[styles.emptyBtn, { backgroundColor: nicheColor }]}>
-              <Text style={styles.emptyBtnText}>Fikir Bankına Git ›</Text>
+              <Text style={styles.emptyBtnText}>{t('qa.openBankBtn')}</Text>
             </Pressable>
           </View>
         )}
-        {filtered.map((idea) => (
-          <Pressable
-            key={idea.id}
-            onPress={() => router.push({ pathname: '/idea/[text]', params: { text: encodeURIComponent(idea.description ?? idea.title ?? ''), niche: niche ?? '', source: 'bank' } })}
-            style={[styles.resultRow, { borderLeftColor: nicheColor }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.resultTitle} numberOfLines={1}>{idea.title ?? 'Adsız fikir'}</Text>
-              <Text style={styles.resultDesc} numberOfLines={2}>{idea.description ?? ''}</Text>
-              {idea.tags && idea.tags.length > 0 && (
-                <View style={styles.tagRow}>
-                  {idea.tags.slice(0, 3).map((tag) => (
-                    <View key={tag} style={[styles.tag, { backgroundColor: soft }]}>
-                      <Text style={[styles.tagText, { color: deep }]}>#{tag}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-            <Text style={[styles.resultChev, { color: nicheColor }]}>›</Text>
-          </Pressable>
-        ))}
+        {filtered.map((idea) => {
+          const ideaText = (idea.title ?? idea.description ?? '').trim();
+          return (
+            <Pressable
+              key={idea.id}
+              onPress={() => {
+                if (!ideaText) return;
+                router.push({
+                  pathname: '/idea/[text]',
+                  params: { text: encodeURIComponent(ideaText), niche: niche ?? '', source: 'bank' },
+                });
+              }}
+              style={[styles.resultRow, { borderLeftColor: nicheColor }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.resultTitle} numberOfLines={1}>{idea.title ?? t('qa.untitled')}</Text>
+                <Text style={styles.resultDesc} numberOfLines={2}>{idea.description ?? ''}</Text>
+                {idea.tags && idea.tags.length > 0 && (
+                  <View style={styles.tagRow}>
+                    {idea.tags.slice(0, 3).map((tag) => (
+                      <View key={tag} style={[styles.tag, { backgroundColor: soft }]}>
+                        <Text style={[styles.tagText, { color: deep }]}>#{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.resultChev, { color: nicheColor }]}>›</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.tipsHeader}>
-        <Text style={styles.sectionTitle}>⚡ Hızlı İpuçları</Text>
+        <Text style={styles.sectionTitle}>{t('qa.tipsTitle')}</Text>
         <Text style={styles.tipsSub}>
-          {niche ? `${nicheEntry?.icon ?? ''} ${t(`niches.${niche}`, niche)} için özel ipucu + diğer nişlerden` : 'Tüm nişlerden seçilmiş 4 ipucu'}
+          {niche
+            ? t('qa.tipsSubNiche', { icon: nicheEntry?.icon ?? '', niche: t(`niches.${niche}`, niche) })
+            : t('qa.tipsSubAll')}
         </Text>
       </View>
       <View style={styles.tipsGrid}>
@@ -204,15 +253,15 @@ export default function InspirationBoardScreen() {
               <View style={[styles.tipBadge, { backgroundColor: tipColor + '22', borderColor: tipColor }]}>
                 <Text style={[styles.tipEmoji]}>{tip.emoji}</Text>
               </View>
-              <Text style={[styles.tipTitle, { color: tipColor }]}>{tip.title}</Text>
-              <Text style={styles.tipBody}>{tip.text}</Text>
+              <Text style={[styles.tipTitle, { color: tipColor }]}>{t(`qa.${tip.title}`)}</Text>
+              <Text style={styles.tipBody}>{t(`qa.${tip.text}`)}</Text>
             </View>
           );
         })}
       </View>
 
       <Pressable onPress={() => router.push('/idea-bank')} style={[styles.cta, { backgroundColor: nicheColor }]}>
-        <Text style={styles.ctaText}>💡 Fikir Bankını Aç ›</Text>
+        <Text style={styles.ctaText}>{t('qa.openBankCta')}</Text>
       </Pressable>
     </ScrollView>
   );

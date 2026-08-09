@@ -22,7 +22,7 @@ export default function NicheSelect() {
     if (!q) return list;
     return list.filter((n) =>
       t(`niches.${n.id}`, n.id).toLowerCase().includes(q) ||
-      (n.description?.toLowerCase().includes(q) ?? false)
+      t(`descriptions.${n.id}`, n.description ?? '').toLowerCase().includes(q)
     );
   }, [list, query, t]);
 
@@ -51,20 +51,20 @@ export default function NicheSelect() {
   return (
     <View style={styles.container}>
       <View style={styles.stepBadge}>
-        <Text style={styles.stepText}>2 / 4</Text>
+        <Text style={styles.stepText}>{t('onboardingFlow.stepOf', { current: 2, total: 4 })}</Text>
       </View>
-      <Text style={styles.title}>{t('onboarding.title')}</Text>
-      <Text style={styles.subtitle}>{t('onboarding.subtitle')}</Text>
+      <Text style={styles.title}>{t('onboardingFlow.nicheTitle')}</Text>
+      <Text style={styles.subtitle}>{t('onboardingFlow.nicheSubtitle')}</Text>
 
       <View style={styles.helperRow}>
         <Text style={styles.helperText}>
-          Birden fazla niş seçebilirsin ({selected.size} seçili)
+          {t('onboardingFlow.nicheHelper', { count: selected.size })}
         </Text>
       </View>
 
       <TextInput
         style={styles.search}
-        placeholder="Niş ara..."
+        placeholder={t('onboardingFlow.nicheSearchPlaceholder')}
         value={query}
         onChangeText={setQuery}
         placeholderTextColor="#9CA3AF"
@@ -95,24 +95,24 @@ export default function NicheSelect() {
                 )}
                 {isPopular && !isSel && (
                   <View style={styles.popularBadge}>
-                    <Text style={styles.popularBadgeText}>⭐ ÖNERİLEN</Text>
+                    <Text style={styles.popularBadgeText}>{t('onboardingFlow.nichePopularBadge')}</Text>
                   </View>
                 )}
                 <NicheImage nicheId={n.id} size={88} borderRadius={14} />
                 <Text style={styles.label}>{t(`niches.${n.id}`, n.id)}</Text>
-                {n.description && <Text style={styles.desc}>{n.description}</Text>}
-                <Text style={styles.hint}>Basılı tut: örnekler</Text>
+                {n.description && <Text style={styles.desc}>{t(`descriptions.${n.id}`, n.description)}</Text>}
+                <Text style={styles.hint}>{t('onboardingFlow.nicheHoldHint')}</Text>
               </Pressable>
             );
           })}
         {filtered.length === 0 && (
-          <Text style={styles.noResults}>"{query}" için sonuç yok</Text>
+          <Text style={styles.noResults}>{t('onboardingFlow.nicheNoResults', { query })}</Text>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+        <Pressable onPress={() => router.replace('/(onboarding)/language-select')} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>{t('onboardingFlow.nicheBack')}</Text>
         </Pressable>
         <Pressable
           onPress={onContinue}

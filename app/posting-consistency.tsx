@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import i18n from '../i18n';
+import { useTranslation } from 'react-i18next';
 import {
   calcPostingConsistency,
   clearPCS,
@@ -20,7 +22,20 @@ import {
   todayPCSKey,
 } from '../services/storage';
 
-const weekdayLabels = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+const getWeekdayLabels = (): string[] => {
+  const lng = (i18n.language || 'en').split('-')[0];
+  const base = new Date(2024, 0, 1);
+  return [1, 2, 3, 4, 5, 6, 0].map((d) => {
+    const date = new Date(base);
+    const diff = (d - base.getDay() + 7) % 7;
+    date.setDate(base.getDate() + diff);
+    try {
+      return new Intl.DateTimeFormat(lng, { weekday: 'short' }).format(date);
+    } catch {
+      return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d === 0 ? 6 : d - 1];
+    }
+  });
+};
 
 const scoreColor = (s: number): string => {
   if (s >= 80) return '#10b981';
@@ -29,14 +44,15 @@ const scoreColor = (s: number): string => {
   return '#ef4444';
 };
 
-const scoreLabel = (s: number): string => {
-  if (s >= 80) return 'Mükemmel';
-  if (s >= 60) return 'İyi';
-  if (s >= 40) return 'Geliştirilmeli';
-  return 'Kritik';
+const scoreLabel = (s: number, t: (k: string) => string): string => {
+  if (s >= 80) return t('pcs.scoreElite');
+  if (s >= 60) return t('pcs.scoreGood');
+  if (s >= 40) return t('pcs.scoreImprove');
+  return t('pcs.scoreCritical');
 };
 
 export default function PostingConsistencyScreen() {
+  const { t } = useTranslation();
   const [cadence, setCadence] = useState<PCSPost['cadence']>('3xweek');
   const [platform, setPlatform] = useState<PCSPost['platform']>('instagram');
   const [dateInput, setDateInput] = useState<string>(todayPCSKey());
@@ -102,6 +118,8 @@ export default function PostingConsistencyScreen() {
   const maxDist = useMemo(() => {
     return Math.max(1, ...score.weeklyDistribution);
   }, [score]);
+
+  const weekdayLabels = useMemo(() => getWeekdayLabels(), []);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -169,7 +187,7 @@ export default function PostingConsistencyScreen() {
           <Text style={[styles.scoreBig, { color: scoreColor(score.score) }]}>
             {score.score}
           </Text>
-          <Text style={styles.scoreBigLabel}>/100 · {scoreLabel(score.score)}</Text>
+          <Text style={styles.scoreBigLabel}>/100 · {scoreLabel(score.score, t)}</Text>
         </View>
         <View style={styles.scoreBar}>
           <View

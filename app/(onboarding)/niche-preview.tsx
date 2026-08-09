@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -9,18 +9,22 @@ type Niche = { id: string; icon: string; color: string; description?: string };
 
 export default function NichePreview() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
   const niche = (niches as Niche[]).find((n) => n.id === id);
-  const samples = id ? getNichePool(id as keyof ReturnType<typeof getNichePool> extends never ? never : any).slice(0, 5) : [];
+  const samples = useMemo(() => {
+    if (!id) return [];
+    const lng = (i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr';
+    return getNichePool(id as any, lng).slice(0, 5);
+  }, [id, i18n.language]);
 
   if (!niche) {
     return (
       <View style={styles.center}>
-        <Text>Niş bulunamadı.</Text>
+        <Text>{t('onboardingFlow.nicheNotFound')}</Text>
         <Pressable onPress={() => router.back()} style={styles.cta}>
-          <Text style={styles.ctaText}>Geri</Text>
+          <Text style={styles.ctaText}>{t('common.back')}</Text>
         </Pressable>
       </View>
     );
@@ -34,7 +38,7 @@ export default function NichePreview() {
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.closeBtnText}>✕</Text>
         </Pressable>
-        <Text style={styles.topTitle}>Örnek Fikirler</Text>
+        <Text style={styles.topTitle}>{t('onboardingFlow.nichePreviewTitle')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -42,10 +46,10 @@ export default function NichePreview() {
         <View style={[styles.hero, { backgroundColor: niche.color + '15', borderColor: niche.color }]}>
           <Text style={styles.heroIcon}>{niche.icon}</Text>
           <Text style={styles.heroTitle}>{t(`niches.${niche.id}`, niche.id)}</Text>
-          {niche.description && <Text style={styles.heroDesc}>{niche.description}</Text>}
+          {niche.description && <Text style={styles.heroDesc}>{t(`descriptions.${niche.id}`, niche.description)}</Text>}
         </View>
 
-        <Text style={styles.sectionTitle}>Bu nişte üretilebilecek 5 örnek fikir:</Text>
+        <Text style={styles.sectionTitle}>{t('onboardingFlow.nichePreviewSubtitle')}</Text>
         {samples.map((idea, idx) => (
           <View key={idx} style={styles.sampleRow}>
             <View style={[styles.sampleNum, { backgroundColor: niche.color }]}>
@@ -65,7 +69,7 @@ export default function NichePreview() {
           onPress={() => router.replace({ pathname: '/(onboarding)/niche-select', params: { preset: niche.id } } as any)}
           style={[styles.cta, { backgroundColor: niche.color }]}
         >
-          <Text style={styles.ctaText}>Bu nişi seç</Text>
+          <Text style={styles.ctaText}>{t('onboardingFlow.nichePreviewPick')}</Text>
         </Pressable>
       </View>
     </View>

@@ -12,13 +12,22 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { HASHTAG_CATEGORY_META, HashtagCategory, HashtagItem, generateHashtags, normalizeTag } from '../services/aiService';
 import { NicheId } from '../services/contentService';
 import { getStoredNiche, addIdeaTag, addCopyToHistory } from '../services/storage';
 
+const CAT_KEY: Record<HashtagCategory, string> = {
+  genel: 'catGenel',
+  nis: 'catNiche',
+  uzun: 'catLong',
+  trend: 'catTrend',
+};
+
 export default function HashtagsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ text?: string; niche?: string }>();
   const initialText = typeof params.text === 'string' ? decodeURIComponent(params.text) : '';
   const initialNiche = typeof params.niche === 'string' ? (params.niche as NicheId) : null;
@@ -48,7 +57,7 @@ export default function HashtagsScreen() {
   const onGenerate = async () => {
     const text = draft.trim();
     if (text.length === 0) {
-      Alert.alert('Fikir gerekli', 'Lütfen hashtag üretmek için bir fikir yaz.');
+      Alert.alert(t('hashtags.noIdeaTitle'), t('hashtags.noIdeaBody'));
       return;
     }
     const useNiche = (niche ?? 'lifestyle') as NicheId;
@@ -75,7 +84,7 @@ export default function HashtagsScreen() {
   const onCopySelected = async () => {
     const tags = items.filter((h) => selected.has(h.tag));
     if (tags.length === 0) {
-      Alert.alert('Seçim yok', 'Kopyalamak için en az bir hashtag seç.');
+      Alert.alert(t('hashtags.noSelectionTitle'), t('hashtags.noSelectionBody'));
       return;
     }
     const text = tags.map((h) => `#${h.tag}`).join(' ');
@@ -93,12 +102,12 @@ export default function HashtagsScreen() {
   const onAddAsTags = async () => {
     const text = draft.trim();
     if (text.length === 0) {
-      Alert.alert('Fikir gerekli', 'Önce üretilecek fikri yaz.');
+      Alert.alert(t('hashtags.noIdeaTitle'), t('hashtags.noIdeaTagsBody'));
       return;
     }
     const tags = items.filter((h) => selected.has(h.tag));
     if (tags.length === 0) {
-      Alert.alert('Seçim yok', 'Etiket olarak eklemek için hashtag seç.');
+      Alert.alert(t('hashtags.noSelectionTitle'), t('hashtags.noSelectionTagsBody'));
       return;
     }
     let added = 0;
@@ -109,7 +118,7 @@ export default function HashtagsScreen() {
         added += 1;
       }
     }
-    Alert.alert('Etiketlere eklendi', `${added} hashtag fikre etiket olarak eklendi.`);
+    Alert.alert(t('hashtags.tagsAddedTitle'), t('hashtags.tagsAddedBody', { count: added }));
   };
 
   const visible = filterCat === 'all' ? items : items.filter((h) => h.category === filterCat);
@@ -122,22 +131,22 @@ export default function HashtagsScreen() {
 
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Geri</Text>
+          <Text style={styles.backTxt}>{t('hashtags.backBtn')}</Text>
         </Pressable>
-        <Text style={styles.title}># Hashtag Üretici</Text>
+        <Text style={styles.title}>{t('hashtags.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <Text style={styles.subtitle}>
-        Fikrin için AI 15 hashtag önerisi sunsun. Seçtiklerini tek tıkla kopyala veya fikrine etiket olarak ekle.
+        {t('hashtags.subtitle')}
       </Text>
 
       <View style={styles.editorBox}>
-        <Text style={styles.editorLabel}>Fikrin</Text>
+        <Text style={styles.editorLabel}>{t('hashtags.yourIdea')}</Text>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="örn: Sabah rutini için 5 ipucu"
+          placeholder={t('hashtags.inputPlaceholder')}
           placeholderTextColor="#9CA3AF"
           style={styles.editorInput}
           multiline
@@ -150,7 +159,7 @@ export default function HashtagsScreen() {
             disabled={loading || draft.trim().length === 0}
             style={[styles.genBtn, (loading || draft.trim().length === 0) && styles.genBtnDisabled]}
           >
-            <Text style={styles.genBtnTxt}>{loading ? '⏳ Üretiliyor…' : '✨ Üret'}</Text>
+            <Text style={styles.genBtnTxt}>{loading ? t('hashtags.genPending') : t('hashtags.genBtn')}</Text>
           </Pressable>
         </View>
       </View>
@@ -158,13 +167,13 @@ export default function HashtagsScreen() {
       {loading && (
         <View style={styles.loadingBox}>
           <ActivityIndicator color="#8B5CF6" />
-          <Text style={styles.loadingTxt}>AI hashtag hazırlıyor…</Text>
+          <Text style={styles.loadingTxt}>{t('hashtags.loadingTxt')}</Text>
         </View>
       )}
 
       {!loading && fallback && items.length > 0 && (
         <View style={styles.offlineBox}>
-          <Text style={styles.offlineTxt}>📴 AI çevrimdışı — akıllı yerel öneriler kullanıldı</Text>
+          <Text style={styles.offlineTxt}>{t('hashtags.offlineTxt')}</Text>
         </View>
       )}
 
@@ -176,7 +185,7 @@ export default function HashtagsScreen() {
             contentContainerStyle={styles.filterRow}
           >
             <FilterChip
-              label={`Tümü (${items.length})`}
+              label={`${t('hashtags.filterAll')} (${items.length})`}
               active={filterCat === 'all'}
               onPress={() => setFilterCat('all')}
               color="#111827"
@@ -187,7 +196,7 @@ export default function HashtagsScreen() {
               return (
                 <FilterChip
                   key={c}
-                  label={`${m.icon} ${m.label} (${counts[c]})`}
+                  label={`${m.icon} ${t(`hashtags.${CAT_KEY[c]}`)} (${counts[c]})`}
                   active={filterCat === c}
                   onPress={() => setFilterCat(c)}
                   color={m.color}
@@ -198,10 +207,10 @@ export default function HashtagsScreen() {
 
           <View style={styles.actionBar}>
             <Pressable onPress={onCopySelected} style={[styles.actionBtn, styles.actionBtnCopy]}>
-              <Text style={styles.actionBtnTxt}>{copiedAll ? '✓ Kopyalandı' : '⧉ Seçili Olanları Kopyala'}</Text>
+              <Text style={styles.actionBtnTxt}>{copiedAll ? t('hashtags.copiedAll') : t('hashtags.copySelected')}</Text>
             </Pressable>
             <Pressable onPress={onAddAsTags} style={[styles.actionBtn, styles.actionBtnTag]}>
-              <Text style={styles.actionBtnTxt}>🏷 Etiketlere Ekle</Text>
+              <Text style={styles.actionBtnTxt}>{t('hashtags.addTags')}</Text>
             </Pressable>
           </View>
 
@@ -235,9 +244,7 @@ export default function HashtagsScreen() {
               })}
             </View>
 
-            <Text style={styles.hint}>
-              💡 İpucu: Bir hashtag'e uzun bas → sadece o kopyalanır.
-            </Text>
+            <Text style={styles.hint}>{t('hashtags.hint')}</Text>
           </ScrollView>
         </>
       )}
@@ -245,10 +252,8 @@ export default function HashtagsScreen() {
       {!loading && items.length === 0 && (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyIcon}>#️⃣</Text>
-          <Text style={styles.emptyTitle}>Hashtag üretilmemiş</Text>
-          <Text style={styles.emptyDesc}>
-            Yukarıya fikrini yaz ve “Üret”e dokun. AI 15 hashtag önerisi getirsin.
-          </Text>
+          <Text style={styles.emptyTitle}>{t('hashtags.emptyTitle')}</Text>
+          <Text style={styles.emptyDesc}>{t('hashtags.emptyDesc')}</Text>
         </View>
       )}
     </View>

@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   PomodoroEntry,
   PomodoroSettings,
@@ -34,12 +36,24 @@ const formatMMSS = (totalSeconds: number): string => {
 const dateLabel = (key: string): string => {
   const [y, m, d] = key.split('-').map((s) => parseInt(s, 10));
   const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-  const dayShort = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][dt.getDay()];
+  const lng = (i18n.language || 'en').split('-')[0];
+  let dayShort: string;
+  try {
+    dayShort = new Intl.DateTimeFormat(lng, { weekday: 'short' }).format(dt);
+  } catch {
+    dayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getDay()];
+  }
   const isToday = (() => {
     const t = new Date();
     return t.getFullYear() === y && t.getMonth() === (m ?? 1) - 1 && t.getDate() === d;
   })();
-  if (isToday) return 'Bugün';
+  if (isToday) {
+    try {
+      return new Intl.DateTimeFormat(lng, { weekday: 'long' }).format(dt);
+    } catch {
+      return 'Today';
+    }
+  }
   return `${dayShort} ${d}/${m}`;
 };
 

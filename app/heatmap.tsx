@@ -9,10 +9,9 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { HeatmapData, HeatmapDay, getHeatmapData, getScheduleForDate } from '../services/storage';
-
-const MONTH_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
-const DAY_LABELS = ['', 'Pzt', '', 'Çar', '', 'Cum', ''];
 
 const cellColor = (planned: number, done: number, isToday: boolean): string => {
   if (isToday) return '#7c5cff';
@@ -36,9 +35,17 @@ const dayIntensity = (planned: number, done: number, isToday: boolean): 'today' 
 export default function HeatmapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, i18n: i18nInstance } = useTranslation();
   const [data, setData] = useState<HeatmapData | null>(null);
   const [selected, setSelected] = useState<HeatmapDay | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+
+  const MONTH_LABELS = useMemo(() => (t('heatmap.month', { returnObjects: true }) as string[]) || [], [t]);
+  const DAY_LABELS = useMemo(() => (t('heatmap.day', { returnObjects: true }) as string[]) || [], [t]);
+  const LOCALE_TAG = useMemo(() => {
+    const l = (i18nInstance.language || 'en').split('-')[0];
+    return l === 'tr' ? 'tr-TR' : l === 'es' ? 'es-ES' : l === 'de' ? 'de-DE' : l === 'fr' ? 'fr-FR' : 'en-US';
+  }, [i18nInstance.language]);
 
   const load = useCallback(async () => {
     const d = await getHeatmapData(365);
@@ -75,14 +82,14 @@ export default function HeatmapScreen() {
         const d = new Date(cell.date);
         const m = d.getMonth();
         if (m !== lastMonth) {
-          labels.push({ weekIdx: wIdx, label: MONTH_TR[m] });
+          labels.push({ weekIdx: wIdx, label: MONTH_LABELS[m] });
           lastMonth = m;
           break;
         }
       }
     });
     return labels;
-  }, [grid]);
+  }, [grid, MONTH_LABELS]);
 
   const onPick = async (day: HeatmapDay) => {
     setSelected(day);
@@ -104,34 +111,34 @@ export default function HeatmapScreen() {
 
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Geri</Text>
+          <Text style={styles.backTxt}>{t('heatmap.back')}</Text>
         </Pressable>
-        <Text style={styles.title}>🗓 İçerik Haritası</Text>
+        <Text style={styles.title}>{t('heatmap.title')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <Text style={styles.subtitle}>
-        Son 365 günde hangi günlerde içerik ürettin veya planladın. Koyu hücreler daha yoğun günleri gösterir.
+        {t('heatmap.subtitle')}
       </Text>
 
       <View style={styles.statsRow}>
-        <Stat label="Aktif gün" value={data.activeDays} color="#10B981" />
-        <Stat label="Planlı" value={data.totalPlanned} color="#4D96FF" />
-        <Stat label="Üretildi" value={data.totalDone} color="#7c5cff" />
+        <Stat label={t('heatmap.statActive')} value={data.activeDays} color="#10B981" />
+        <Stat label={t('heatmap.statPlanned')} value={data.totalPlanned} color="#4D96FF" />
+        <Stat label={t('heatmap.statDone')} value={data.totalDone} color="#7c5cff" />
       </View>
 
       <View style={styles.streakRow}>
         <View style={styles.streakBox}>
           <Text style={styles.streakNum}>{data.currentStreak}</Text>
-          <Text style={styles.streakLbl}>şimdiki seri</Text>
+          <Text style={styles.streakLbl}>{t('heatmap.streakCurrent')}</Text>
         </View>
         <View style={styles.streakBox}>
           <Text style={styles.streakNum}>{data.longestStreak}</Text>
-          <Text style={styles.streakLbl}>en uzun seri</Text>
+          <Text style={styles.streakLbl}>{t('heatmap.streakLongest')}</Text>
         </View>
         <View style={styles.streakBox}>
           <Text style={styles.streakNum}>{data.maxDone}</Text>
-          <Text style={styles.streakLbl}>en yoğun gün</Text>
+          <Text style={styles.streakLbl}>{t('heatmap.streakMaxDone')}</Text>
         </View>
       </View>
 
@@ -177,14 +184,14 @@ export default function HeatmapScreen() {
       </ScrollView>
 
       <View style={styles.legendRow}>
-        <Text style={styles.legendLbl}>Az</Text>
+        <Text style={styles.legendLbl}>{t('heatmap.legendLow')}</Text>
         {[0, 1, 2, 4, 6].map((score) => (
           <View
             key={score}
             style={[styles.legendCell, { backgroundColor: cellColor(score > 5 ? 0 : score % 2, score > 5 ? 3 : Math.floor(score / 2), false) }]}
           />
         ))}
-        <Text style={styles.legendLbl}>Çok</Text>
+        <Text style={styles.legendLbl}>{t('heatmap.legendHigh')}</Text>
       </View>
 
       <View style={styles.detailCard}>
@@ -192,8 +199,8 @@ export default function HeatmapScreen() {
           <View>
             <View style={styles.detailHeader}>
               <Text style={styles.detailDate}>
-                {new Date(selected.date).toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                {selected.isToday ? ' · bugün' : ''}
+                {new Date(selected.date).toLocaleDateString(LOCALE_TAG, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                {selected.isToday ? t('heatmap.detailToday') : ''}
               </Text>
               <Pressable onPress={() => setSelected(null)} style={styles.detailClose}>
                 <Text style={styles.detailCloseTxt}>✕</Text>
@@ -202,28 +209,28 @@ export default function HeatmapScreen() {
             <View style={styles.detailStatsRow}>
               <View style={styles.detailStat}>
                 <Text style={styles.detailStatNum}>{selected.planned}</Text>
-                <Text style={styles.detailStatLbl}>planlanan</Text>
+                <Text style={styles.detailStatLbl}>{t('heatmap.detailPlanned')}</Text>
               </View>
               <View style={styles.detailStat}>
                 <Text style={[styles.detailStatNum, { color: '#7c5cff' }]}>{selected.done}</Text>
-                <Text style={styles.detailStatLbl}>üretildi</Text>
+                <Text style={styles.detailStatLbl}>{t('heatmap.detailDone')}</Text>
               </View>
             </View>
             {selectedItems.length > 0 ? (
               <View style={styles.detailList}>
-                {selectedItems.map((t, i) => (
-                  <Text key={`${i}-${t}`} style={styles.detailItem} numberOfLines={2}>• {t}</Text>
+                {selectedItems.map((it, i) => (
+                  <Text key={`${i}-${it}`} style={styles.detailItem} numberOfLines={2}>• {it}</Text>
                 ))}
               </View>
             ) : (
-              <Text style={styles.detailEmpty}>Bu gün için plan yok.</Text>
+              <Text style={styles.detailEmpty}>{t('heatmap.detailEmpty')}</Text>
             )}
           </View>
         ) : (
           <View style={styles.placeholder}>
             <Text style={styles.placeholderIcon}>👆</Text>
             <Text style={styles.placeholderTxt}>
-              Detayları görmek için bir güne dokun. Koyu yeşil = çok yoğun, açık yeşil = az içerik.
+              {t('heatmap.placeholder')}
             </Text>
           </View>
         )}

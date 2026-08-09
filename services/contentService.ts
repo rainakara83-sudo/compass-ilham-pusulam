@@ -1,4 +1,7 @@
 import contentPool from '../data/content-pool.json';
+import i18n from '../i18n';
+import { SupportedLng } from '../i18n';
+import { getNicheIdeas as getNicheIdeasI18n } from '../data/niche-ideas-i18n';
 
 export type NicheId = keyof typeof contentPool;
 
@@ -9,6 +12,20 @@ export type WeeklyIdea = {
 };
 
 const ALL_IDEAS: Record<NicheId, string[]> = contentPool as Record<NicheId, string[]>;
+
+const getCurrentLang = (lang?: SupportedLng): SupportedLng => {
+  if (lang) return lang;
+  const cur = (i18n.language || 'en').split('-')[0];
+  if (cur === 'tr' || cur === 'en' || cur === 'es' || cur === 'de' || cur === 'fr') return cur;
+  return 'en';
+};
+
+const getPoolForLang = (niche: NicheId, lang?: SupportedLng): string[] => {
+  const lng = getCurrentLang(lang);
+  if (lng === 'tr') return ALL_IDEAS[niche] ?? [];
+  const localized = getNicheIdeasI18n(niche, lng);
+  return localized.length > 0 ? localized : (ALL_IDEAS[niche] ?? []);
+};
 
 const shuffle = <T,>(arr: T[]): T[] => {
   const copy = [...arr];
@@ -24,10 +41,8 @@ export const isWeekend = (d: Date = new Date()): boolean => {
   return day === 0 || day === 6;
 };
 
-export const WEEKEND_BADGE = ['⚡ Bonus', '🎉 Hafta sonu', '✨ Ek fikir'];
-
-export const pickWeeklyIdeasFromPool = (niche: NicheId, weekend: boolean = isWeekend()): WeeklyIdea[] => {
-  const pool = ALL_IDEAS[niche] ?? [];
+export const pickWeeklyIdeasFromPool = (niche: NicheId, weekend: boolean = isWeekend(), lang?: SupportedLng): WeeklyIdea[] => {
+  const pool = getPoolForLang(niche, lang);
   if (pool.length === 0) return [];
   const shuffled = shuffle(pool);
   const baseCount = 3;
@@ -43,78 +58,60 @@ export const pickWeeklyIdeasFromPool = (niche: NicheId, weekend: boolean = isWee
   }));
 };
 
-export const getNichePool = (niche: NicheId): string[] => {
-  return ALL_IDEAS[niche] ?? [];
+export const getNichePool = (niche: NicheId, lang?: SupportedLng): string[] => {
+  return getPoolForLang(niche, lang);
 };
 
-export const searchNichePool = (niche: NicheId, query: string): string[] => {
-  const pool = ALL_IDEAS[niche] ?? [];
+export const searchNichePool = (niche: NicheId, query: string, lang?: SupportedLng): string[] => {
+  const pool = getPoolForLang(niche, lang);
   const q = query.trim().toLowerCase();
   if (!q) return pool;
   return pool.filter((idea) => idea.toLowerCase().includes(q));
 };
 
-export const pickRandomFromPool = (niche: NicheId, exclude: string[] = []): string | null => {
-  const pool = (ALL_IDEAS[niche] ?? []).filter((idea) => !exclude.includes(idea));
+export const pickRandomFromPool = (niche: NicheId, exclude: string[] = [], lang?: SupportedLng): string | null => {
+  const pool = getPoolForLang(niche, lang).filter((idea) => !exclude.includes(idea));
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 };
 
 // ============ Best Posting Time Engine ============
+export type SlotLabel = 'morning' | 'noon' | 'evening' | 'night';
+
 export type TimeSlot = {
   start: number; // 0-23 hour
   end: number;   // 0-23 hour
-  label: 'morning' | 'noon' | 'evening' | 'night';
+  label: SlotLabel;
   weight: number; // 1-10
 };
 
-export const NICHE_TIME_BOOST: Record<NicheId, TimeSlot[]> = {
-  fitness: [
-    { start: 6, end: 8, label: 'morning', weight: 9 },
-    { start: 12, end: 13, label: 'noon', weight: 7 },
-    { start: 18, end: 21, label: 'evening', weight: 10 },
-  ],
-  food: [
-    { start: 7, end: 9, label: 'morning', weight: 7 },
-    { start: 11, end: 13, label: 'noon', weight: 10 },
-    { start: 18, end: 20, label: 'evening', weight: 9 },
-  ],
-  tech: [
-    { start: 9, end: 11, label: 'morning', weight: 9 },
-    { start: 14, end: 16, label: 'noon', weight: 7 },
-    { start: 17, end: 19, label: 'evening', weight: 8 },
-  ],
-  fashion: [
-    { start: 8, end: 10, label: 'morning', weight: 6 },
-    { start: 12, end: 14, label: 'noon', weight: 10 },
-    { start: 19, end: 22, label: 'evening', weight: 10 },
-  ],
-  travel: [
-    { start: 7, end: 9, label: 'morning', weight: 8 },
-    { start: 13, end: 15, label: 'noon', weight: 7 },
-    { start: 20, end: 23, label: 'night', weight: 9 },
-  ],
-  gaming: [
-    { start: 12, end: 14, label: 'noon', weight: 8 },
-    { start: 17, end: 20, label: 'evening', weight: 10 },
-    { start: 22, end: 24, label: 'night', weight: 9 },
-  ],
-  personal_dev: [
-    { start: 6, end: 9, label: 'morning', weight: 10 },
-    { start: 12, end: 13, label: 'noon', weight: 7 },
-    { start: 21, end: 23, label: 'night', weight: 8 },
-  ],
-  beauty: [
-    { start: 8, end: 10, label: 'morning', weight: 7 },
-    { start: 13, end: 15, label: 'noon', weight: 8 },
-    { start: 19, end: 23, label: 'evening', weight: 10 },
-  ],
-  astrology: [
-    { start: 7, end: 9, label: 'morning', weight: 8 },
-    { start: 20, end: 23, label: 'evening', weight: 10 },
-    { start: 23, end: 24, label: 'night', weight: 9 },
-  ],
+export const TIME_SLOTS: TimeSlot[] = [
+  { start: 6,  end: 12, label: 'morning', weight: 5 },
+  { start: 12, end: 18, label: 'noon',    weight: 5 },
+  { start: 18, end: 24, label: 'evening', weight: 5 },
+  { start: 0,  end: 6,  label: 'night',   weight: 5 },
+];
+
+export const NICHE_TIME_WEIGHTS: Record<NicheId, { morning: number; noon: number; evening: number; night: number }> = {
+  fitness:       { morning: 9, noon: 7, evening: 10, night: 4 },
+  food:          { morning: 7, noon: 10, evening: 9, night: 3 },
+  tech:          { morning: 9, noon: 7, evening: 8, night: 5 },
+  fashion:       { morning: 6, noon: 10, evening: 10, night: 5 },
+  travel:        { morning: 8, noon: 7, evening: 9, night: 5 },
+  gaming:        { morning: 5, noon: 8, evening: 10, night: 9 },
+  personal_dev:  { morning: 10, noon: 7, evening: 8, night: 6 },
+  beauty:        { morning: 7, noon: 8, evening: 10, night: 4 },
+  astrology:     { morning: 8, noon: 6, evening: 10, night: 9 },
 };
+
+export const NICHE_TIME_BOOST: Record<NicheId, TimeSlot[]> = (() => {
+  const out: Record<NicheId, TimeSlot[]> = {} as Record<NicheId, TimeSlot[]>;
+  (Object.keys(NICHE_TIME_WEIGHTS) as NicheId[]).forEach((id) => {
+    const w = NICHE_TIME_WEIGHTS[id];
+    out[id] = TIME_SLOTS.map((s) => ({ ...s, weight: w[s.label] }));
+  });
+  return out;
+})();
 
 export type BestTime = {
   hour: number;
@@ -129,17 +126,18 @@ export const getBestTimeForToday = (niche: NicheId, now: Date = new Date()): Bes
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const allCandidates: { hour: number; minute: number; slot: TimeSlot; minutesUntil: number }[] = [];
   for (const slot of slots) {
-    for (let m = slot.start * 60; m <= slot.end * 60 - 15; m += 15) {
+    const startMin = slot.start * 60;
+    const endMin = slot.end === 24 ? 24 * 60 : slot.end * 60;
+    for (let m = startMin; m < endMin; m += 15) {
       const diff = m - currentMinutes;
       const adjusted = diff < 0 ? diff + 24 * 60 : diff;
       allCandidates.push({ hour: Math.floor(m / 60), minute: m % 60, slot, minutesUntil: adjusted });
     }
   }
   if (allCandidates.length === 0) {
-    const def: TimeSlot = { start: 19, end: 21, label: 'evening', weight: 5 };
+    const def: TimeSlot = { start: 18, end: 24, label: 'evening', weight: 5 };
     return { hour: 19, minute: 0, slot: def, minutesUntil: 60, isNow: false };
   }
-  // Pick the soonest candidate whose slot has highest weight near it
   allCandidates.sort((a, b) => {
     const slotScore = b.slot.weight - a.slot.weight;
     if (slotScore !== 0) return slotScore;
@@ -153,21 +151,25 @@ export const formatHHMM = (h: number, m: number): string => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-export const formatDurationTR = (minutes: number): string => {
-  if (minutes <= 0) return '0 dk';
+export const formatDuration = (minutes: number): string => {
+  if (minutes <= 0) return `0 ${i18n.t('home.minuteShort')}`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (h === 0) return `${m} dk`;
-  if (m === 0) return `${h} sa`;
-  return `${h} sa ${m} dk`;
+  if (h === 0) return i18n.t('home.durationMin', { m });
+  if (m === 0) return i18n.t('home.durationHrs', { h });
+  return i18n.t('home.durationHrsMin', { h, m });
 };
 
-export const DAY_NAMES = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-export const MONTH_NAMES = [
-  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-];
-
 export const formatLongDate = (d: Date): string => {
-  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}, ${DAY_NAMES[d.getDay()]}`;
+  const lng = (i18n.language || 'en').split('-')[0];
+  try {
+    return new Intl.DateTimeFormat(lng, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      weekday: 'long',
+    }).format(d);
+  } catch {
+    return d.toDateString();
+  }
 };

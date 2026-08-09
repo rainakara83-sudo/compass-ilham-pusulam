@@ -3,6 +3,7 @@ import { SchedulableTriggerInputTypes } from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { getReminderPresets } from '../i18n';
 
 export type Reminder = {
   id: string;
@@ -17,44 +18,30 @@ export type Reminder = {
   completedCount?: number;
 };
 
-export const REMINDER_TEMPLATES: { label: string; icon: string; hour: number; minute: number; weekdays: number[]; title: string; body: string }[] = [
-  {
-    label: 'Sabah planlaması',
-    icon: '☀️',
-    hour: 8,
-    minute: 0,
-    weekdays: [2, 3, 4, 5, 6],
-    title: 'Günaydın! ☀️',
-    body: 'Bugünkü içeriğini planlamayı unutma.',
-  },
-  {
-    label: 'Yayın saatim',
-    icon: '🎬',
-    hour: 19,
-    minute: 0,
-    weekdays: [3, 6],
-    title: '🎬 Yayın zamanı!',
-    body: 'Bugün içeriğini paylaşmayı unutma.',
-  },
-  {
-    label: 'Haftalık plan',
-    icon: '📅',
-    hour: 20,
-    minute: 0,
-    weekdays: [1],
-    title: '📅 Haftayı planla',
-    body: 'Yeni hafta için fikirlerini seç.',
-  },
-  {
-    label: 'Akşam kontrolü',
-    icon: '🌙',
-    hour: 22,
-    minute: 0,
-    weekdays: [1, 2, 3, 4, 5],
-    title: '🌙 Akşam kontrolü',
-    body: 'Yarınki paylaşımın hazır mı?',
-  },
+const PRESET_ICONS = ['☀️', '🎬', '📅', '🌙'];
+const PRESET_HOURS = [8, 19, 20, 22];
+const PRESET_MINUTES = [0, 0, 0, 0];
+const PRESET_WEEKDAYS: number[][] = [
+  [2, 3, 4, 5, 6],
+  [3, 6],
+  [1],
+  [1, 2, 3, 4, 5],
 ];
+
+export const buildReminderTemplates = (): { label: string; icon: string; hour: number; minute: number; weekdays: number[]; title: string; body: string }[] => {
+  const texts = getReminderPresets();
+  return texts.map((text, idx) => ({
+    label: text.label,
+    icon: PRESET_ICONS[idx],
+    hour: PRESET_HOURS[idx],
+    minute: PRESET_MINUTES[idx],
+    weekdays: PRESET_WEEKDAYS[idx],
+    title: text.title,
+    body: text.body,
+  }));
+};
+
+export const REMINDER_TEMPLATES: { label: string; icon: string; hour: number; minute: number; weekdays: number[]; title: string; body: string }[] = buildReminderTemplates();
 
 const STORAGE_KEY = '@content-coach/reminders';
 const DAILY_IDEA_KEY = '@content-coach/daily-idea-id';
@@ -73,6 +60,44 @@ if (Platform.OS === 'ios') {
     { identifier: 'DONE', buttonTitle: 'Tamam', options: { isAuthenticationRequired: false } },
   ]).catch(() => {});
 }
+
+export type PWAStatus = {
+  isStandalone: boolean;
+  isIOS: boolean;
+  isSafari: boolean;
+  isAndroid: boolean;
+  isChrome: boolean;
+};
+
+export const detectPWAStatus = (): PWAStatus => {
+  if (typeof navigator === 'undefined') {
+    return { isStandalone: false, isIOS: false, isSafari: false, isAndroid: false, isChrome: false };
+  }
+  const ua = navigator.userAgent || '';
+  const isIPadOS = /Mac/.test(ua) && (navigator as any).maxTouchPoints > 1;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || isIPadOS;
+  const isAndroid = /Android/.test(ua);
+  const isChrome = /Chrome|CriOS|Edg/.test(ua) && !/Firefox/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|Edg|FxiOS|OPR/.test(ua) && !isChrome;
+  const isStandalone =
+    typeof window !== 'undefined' &&
+    ((window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      (navigator as any).standalone === true);
+  return { isStandalone, isIOS, isSafari, isAndroid, isChrome };
+};
+
+export const isNotificationsBlockedByPWA = (): { blocked: boolean; reason?: string } => {
+  if (Platform.OS !== 'web') return { blocked: false };
+  const s = detectPWAStatus();
+  if (s.isStandalone) return { blocked: false };
+  if (s.isIOS && s.isSafari) {
+    return { blocked: true, reason: 'iOS Safari\'de bildirimler için uygulamayı ana ekrana eklemelisin.' };
+  }
+  if (s.isAndroid && !s.isChrome) {
+    return { blocked: true, reason: 'Android\'de bildirimler için Chrome\'da ana ekrana eklemelisin.' };
+  }
+  return { blocked: false };
+};
 
 export const requestNotificationPermission = async (): Promise<boolean> => {
   if (!Device.isDevice) return false;

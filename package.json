@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:web": "CI=1 expo export --platform web --output-dir dist && node scripts/postbuild-inject-pwa.js && cp web/manifest.json web/icon-192.png web/icon-512.png dist/"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.24.0",
@@ -34,6 +35,9 @@
     "@babel/core": "^7.25.0",
     "@types/react": "~18.3.12",
     "typescript": "~5.3.3"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "private": true
 }

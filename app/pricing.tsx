@@ -22,6 +22,7 @@ import {
   setUserPlan,
   UserPlan,
 } from '../services/storage';
+import PageHint from '../components/PageHint';
 
 type PlanId = 'free' | 'pro_monthly' | 'pro_yearly';
 
@@ -250,6 +251,7 @@ export default function PricingScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <PageHint hintId="pricing" title={t('pageHints.pricing.title')} description={t('pageHints.pricing.desc')} />
         <Animated.View style={[styles.currentCard, { opacity: fade }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.currentLabel}>{t('pricing.currentPlan')}</Text>

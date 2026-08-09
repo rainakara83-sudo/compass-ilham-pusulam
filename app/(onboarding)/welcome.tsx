@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getStoredNiches } from '../../services/storage';
+import { useTranslation } from 'react-i18next';
+import { getStoredNiches, setOnboarded } from '../../services/storage';
 import { lightColors } from '../../styles/colors';
 import { spacing } from '../../styles/spacing';
 import { radius } from '../../styles/radius';
@@ -11,6 +12,7 @@ import { CompassLogo, CompassBurst } from '../../components/CompassLogo';
 
 export default function Welcome() {
   const router = useRouter();
+  const { t } = useTranslation();
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.6)).current;
   const subtitleFade = useRef(new Animated.Value(0)).current;
@@ -41,7 +43,12 @@ export default function Welcome() {
         ])
       ).start();
 
-      timer = setTimeout(() => {
+      timer = setTimeout(async () => {
+        try {
+          await setOnboarded();
+        } catch {
+          // ignore
+        }
         router.replace('/(tabs)');
       }, 1900);
     });
@@ -76,13 +83,13 @@ export default function Welcome() {
           <CompassBurst size={160} />
         </Animated.View>
         <Animated.Text style={[styles.title, { opacity: fade }]}>
-          Hoş geldin!
+          {t('onboardingFlow.welcomeTitle')}
         </Animated.Text>
         <Animated.Text style={[styles.subtitle, { opacity: subtitleFade }]}>
-          İçerik koçun hazır. Hadi başlayalım 🚀
+          {t('onboardingFlow.welcomeSubtitle')}
         </Animated.Text>
         <Animated.View style={[styles.badge, { opacity: subtitleFade }]}>
-          <Text style={styles.badgeText}>✨ İLHAM PUSULAN</Text>
+          <Text style={styles.badgeText}>{t('onboardingFlow.welcomeBadge')}</Text>
         </Animated.View>
       </View>
     </View>

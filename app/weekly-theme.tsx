@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
-  DAY_NAMES,
+  getDayNames,
   THEME_PILLARS,
   ThemeWeek,
   buildWeekTheme,
@@ -27,22 +29,26 @@ import {
 
 const fmtDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  return d.toLocaleDateString(lng, { day: '2-digit', month: 'short' });
 };
 
 const fmtRange = (ts: number): string => {
   const start = new Date(ts);
   const end = new Date(ts);
   end.setDate(end.getDate() + 6);
-  const f = (d: Date) => d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  const f = (d: Date) => d.toLocaleDateString(lng, { day: '2-digit', month: 'short' });
   return `${f(start)} – ${f(end)}`;
 };
 
 export default function WeeklyThemeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { i18n: i18nInstance } = useTranslation();
   const [list, setList] = useState<ThemeWeek[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const DAY_NAMES = useMemo(() => getDayNames(), [i18nInstance.language]);
 
   const [theme, setTheme] = useState('');
   const [pillar, setPillar] = useState('education');

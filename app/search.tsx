@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Clipboard,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   CopyEntry,
   getDoneIdeas,
@@ -23,6 +24,7 @@ import {
   toggleFavorite,
 } from '../services/storage';
 import { NicheId, getNichePool } from '../services/contentService';
+import contentPool from '../data/content-pool.json';
 
 type Source = 'all' | 'pool' | 'favorites' | 'history' | 'done' | 'copies';
 
@@ -43,6 +45,7 @@ const SOURCE_META: Record<Exclude<Source, 'all'>, { icon: string; label: string;
 export default function SearchScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { i18n } = useTranslation();
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<Source>('all');
   const [loading, setLoading] = useState(true);
@@ -54,19 +57,28 @@ export default function SearchScreen() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [n, favs, hist, dn, cps] = await Promise.all([
-      getStoredNiche(),
-      getFavorites(),
-      getHistory(),
-      getDoneIdeas(),
-      getRecentCopies(),
-    ]);
-    setNiche(n);
-    setFavorites(favs);
-    setHistory(hist);
-    setDone(dn);
-    setCopies(cps);
-    setLoading(false);
+    try {
+      const [n, favs, hist, dn, cps] = await Promise.all([
+        getStoredNiche(),
+        getFavorites(),
+        getHistory(),
+        getDoneIdeas(),
+        getRecentCopies(),
+      ]);
+      setNiche(n);
+      setFavorites(favs ?? []);
+      setHistory(hist ?? []);
+      setDone(dn ?? []);
+      setCopies(cps ?? []);
+    } catch (e) {
+      console.warn('search load error', e);
+      setFavorites([]);
+      setHistory([]);
+      setDone([]);
+      setCopies([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -75,14 +87,32 @@ export default function SearchScreen() {
     }, [load])
   );
 
-  const pool: string[] = useMemo(() => (niche ? getNichePool(niche) : []), [niche]);
+  useEffect(() => {
+    load();
+  }, [load, i18n.language]);
+
+  const pool: string[] = useMemo(() => {
+    const lng = (i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr';
+    if (niche) {
+      const fromNiche = getNichePool(niche, lng);
+      if (fromNiche.length > 0) return fromNiche;
+    }
+    const allNicheIds = Object.keys(contentPool) as NicheId[];
+    const fallback: string[] = [];
+    for (const id of allNicheIds) {
+      const items = getNichePool(id, lng);
+      for (const item of items) {
+        if (!fallback.includes(item)) fallback.push(item);
+      }
+    }
+    return fallback;
+  }, [niche, i18n.language]);
 
   const results: ResultItem[] = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q.length < 2 && source === 'all') return [];
+    if (q.length < 1) return [];
     const items: ResultItem[] = [];
-    const matches = (text: string) =>
-      q.length === 0 ? false : text.toLowerCase().includes(q);
+    const matches = (text: string) => text.toLowerCase().includes(q);
 
     if (source === 'all' || source === 'pool') {
       for (const t of pool) if (matches(t)) items.push({ text: t, source: 'pool' });
@@ -188,7 +218,7 @@ export default function SearchScreen() {
         contentContainerStyle={styles.chipRow}
       >
         <FilterChip
-          label={`Tümü${query.trim().length >= 2 ? ` (${results.length})` : ''}`}
+          label={`Tümü${query.trim().length >= 1 ? ` (${results.length})` : ''}`}
           active={source === 'all'}
           color="#111827"
           onPress={() => setSource('all')}
@@ -196,7 +226,7 @@ export default function SearchScreen() {
         {(Object.keys(SOURCE_META) as Array<keyof typeof SOURCE_META>).map((s) => (
           <FilterChip
             key={s}
-            label={`${SOURCE_META[s].icon} ${SOURCE_META[s].label}${query.trim().length >= 2 ? ` (${counts[s]})` : ''}`}
+            label={`${SOURCE_META[s].icon} ${SOURCE_META[s].label}${query.trim().length >= 1 ? ` (${counts[s]})` : ''}`}
             active={source === s}
             color={SOURCE_META[s].color}
             onPress={() => setSource(s)}
@@ -208,9 +238,9 @@ export default function SearchScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 60 }}
       >
-        {query.trim().length < 2 ? (
+        {query.trim().length < 1 ? (
           <Text style={styles.empty}>
-            Aramak için en az 2 karakter yaz. Tüm kaynaklarda (havuz, favoriler, geçmiş, tamamlanan, kopyalanan) arar.
+            Aramak için bir kelime yaz. Tüm kaynaklarda (havuz, favoriler, geçmiş, tamamlanan, kopyalanan) arar.
           </Text>
         ) : results.length === 0 ? (
           <Text style={styles.empty}>“{query}” için sonuç bulunamadı.</Text>

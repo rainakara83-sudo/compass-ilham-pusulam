@@ -12,6 +12,7 @@ import {
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   DailyCardEntry,
   bumpDailyCardFlip,
@@ -28,18 +29,17 @@ const NICHE_ICONS = (niches as { id: string; icon: string }[]).reduce((acc, n) =
   return acc;
 }, {} as Record<string, string>);
 
-const TURKISH_DAY = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-const TURKISH_MONTH = [
-  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık',
-];
-
 export default function DailyCardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ niche?: string }>();
   const initialNiche: NicheId | null = typeof params.niche === 'string' ? (params.niche as NicheId) : null;
+
+  const LOCALE_TAG = (() => {
+    const l = (i18n.language || 'en').split('-')[0];
+    return l === 'tr' ? 'tr-TR' : l === 'es' ? 'es-ES' : l === 'de' ? 'de-DE' : l === 'fr' ? 'fr-FR' : 'en-US';
+  })();
 
   const [card, setCard] = useState<DailyCardEntry | null>(null);
   const [streak, setStreak] = useState(0);
@@ -117,14 +117,14 @@ export default function DailyCardScreen() {
   }
 
   const today = new Date();
-  const dateLabel = `${today.getDate()} ${TURKISH_MONTH[today.getMonth()]} ${TURKISH_MONTH[today.getMonth()] ? '' : ''}${today.getFullYear()}, ${TURKISH_DAY[today.getDay()]}`;
+  const dateLabel = today.toLocaleDateString(LOCALE_TAG, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const isPrompt = !card.niche;
   const streakTier = streak >= 30 ? 'gold' : streak >= 7 ? 'fire' : streak >= 3 ? 'warm' : 'cold';
   const tierMeta = {
-    gold: { glow: '#F59E0B', label: 'Altın seri', emoji: '🏆' },
-    fire: { glow: '#EF4444', label: 'Ateş seri', emoji: '🔥' },
-    warm: { glow: '#F97316', label: 'Sıcak seri', emoji: '☀️' },
-    cold: { glow: '#3B82F6', label: 'Yeni başlangıç', emoji: '🌱' },
+    gold: { glow: '#F59E0B', label: t('dailyCard.tierGold'), emoji: '🏆' },
+    fire: { glow: '#EF4444', label: t('dailyCard.tierFire'), emoji: '🔥' },
+    warm: { glow: '#F97316', label: t('dailyCard.tierHot'), emoji: '☀️' },
+    cold: { glow: '#3B82F6', label: t('dailyCard.tierNew'), emoji: '🌱' },
   }[streakTier];
 
   const frontRotate = flipAnim.interpolate({
@@ -169,7 +169,7 @@ export default function DailyCardScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Text style={styles.backTxt}>✕</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>🌟 Günün Kartı</Text>
+        <Text style={styles.headerTitle}>{t('dailyCard.title')}</Text>
         <View style={{ width: 32 }} />
       </View>
 
@@ -179,11 +179,11 @@ export default function DailyCardScreen() {
         <View style={[styles.streakPill, { backgroundColor: tierMeta.glow + '22', borderColor: tierMeta.glow }]}>
           <Text style={styles.streakPillEmoji}>{tierMeta.emoji}</Text>
           <Text style={[styles.streakPillTxt, { color: tierMeta.glow }]}>
-            {streak > 0 ? `${streak} gün · ${tierMeta.label}` : 'Bugün başla'}
+            {streak > 0 ? `${t('dailyCard.daysLabel', { count: streak })} · ${tierMeta.label}` : t('dailyCard.startToday')}
           </Text>
         </View>
         <View style={styles.flipsPill}>
-          <Text style={styles.flipsPillTxt}>🔄 {flips} kez çevrildi</Text>
+          <Text style={styles.flipsPillTxt}>{t('dailyCard.flippedCount', { count: flips })}</Text>
         </View>
       </View>
 
@@ -195,11 +195,11 @@ export default function DailyCardScreen() {
           ]}
         >
           <View style={[styles.faceInner, { backgroundColor: frontBg, borderColor: nicheColor }]}>
-            <Text style={[styles.faceBadge, { color: frontBadge }]}>{isPrompt ? '💡 GÜNLÜK SORU' : '✨ GÜNÜN İLHAMI'}</Text>
+            <Text style={[styles.faceBadge, { color: frontBadge }]}>{isPrompt ? t('dailyCard.labelQuestion') : t('dailyCard.labelInspiration')}</Text>
             <Text style={[styles.faceText, { color: frontText }]} numberOfLines={isPrompt ? 5 : 6}>
               {card.idea}
             </Text>
-            <Text style={[styles.faceTapHint, { color: frontText, opacity: 0.6 }]}>Çevirmek için karta dokun ↻</Text>
+            <Text style={[styles.faceTapHint, { color: frontText, opacity: 0.6 }]}>{t('dailyCard.hintFlip')}</Text>
           </View>
         </Animated.View>
 
@@ -211,22 +211,17 @@ export default function DailyCardScreen() {
           ]}
         >
           <View style={[styles.faceInner, { backgroundColor: backBg, borderColor: lightBg }]}>
-            <Text style={[styles.faceBadgeBack, { color: backBadge }]}>🎯 NEDEN BU?</Text>
+            <Text style={[styles.faceBadgeBack, { color: backBadge }]}>{t('dailyCard.labelWhy')}</Text>
             {card.niche ? (
               <Text style={[styles.faceTextBack, { color: backText }]}>
-                Bu fikir senin <Text style={{ fontWeight: '800' }}>{card.niche}</Text> nişinden geldi.
-                {'\n\n'}Kısa bir ipucu:
-                {'\n'}• İlk 3 saniyede dikkat çekici bir açı dene
-                {'\n'}• Paylaşmadan önce 1 cümleyle özetle
-                {'\n'}• Takipçilerine soru sor — yorum alsın
+                {t('dailyCard.whyNiche', { niche: card.niche })}
               </Text>
             ) : (
               <Text style={[styles.faceTextBack, { color: backText }]}>
-                Henüz bir niş seçmedin. Bu yüzden sana bir günlük ilham sorusu gösteriyoruz.
-                {'\n\n'}İpucu: Bir niş seç, bu kart o nişin havuzundan öneriler getirsin.
+                {t('dailyCard.whyNoNiche')}
               </Text>
             )}
-            <Text style={[styles.faceTapHint, { color: backText, opacity: 0.7 }]}>↩ Geri çevirmek için dokun</Text>
+            <Text style={[styles.faceTapHint, { color: backText, opacity: 0.7 }]}>{t('dailyCard.hintFlipBack')}</Text>
           </View>
         </Animated.View>
 
@@ -235,17 +230,17 @@ export default function DailyCardScreen() {
 
       <View style={styles.actions}>
         <Pressable onPress={onCopy} style={[styles.actionBtn, { backgroundColor: nicheColor }]}>
-          <Text style={styles.actionBtnTxt}>{copied ? '✓ Kopyalandı' : '⧉ Kopyala'}</Text>
+          <Text style={styles.actionBtnTxt}>{copied ? t('dailyCard.copied') : t('dailyCard.copy')}</Text>
         </Pressable>
         <Pressable onPress={onReroll} style={[styles.actionBtn, { backgroundColor: darkText }]}>
-          <Text style={styles.actionBtnTxt}>🎲 Yenisi</Text>
+          <Text style={styles.actionBtnTxt}>{t('dailyCard.reroll')}</Text>
         </Pressable>
         <Pressable
           onPress={onOpenDetail}
           disabled={isPrompt}
           style={[styles.actionBtn, { backgroundColor: midBg, opacity: isPrompt ? 0.4 : 1 }]}
         >
-          <Text style={[styles.actionBtnTxt, { color: darkText }]}>Detay ›</Text>
+          <Text style={[styles.actionBtnTxt, { color: darkText }]}>{t('dailyCard.detail')}</Text>
         </Pressable>
       </View>
 

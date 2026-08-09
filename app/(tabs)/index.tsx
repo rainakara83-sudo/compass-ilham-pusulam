@@ -17,6 +17,7 @@ import {
 import { Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import {
   getActiveNiche,
   setActiveNiche,
@@ -53,8 +54,9 @@ import {
   MonthlyUsage,
   UserPlan,
 } from '../../services/storage';
-import { NicheId, WeeklyIdea, pickWeeklyIdeasFromPool, isWeekend, getBestTimeForToday, formatHHMM, formatDurationTR, formatLongDate, NICHE_TIME_BOOST } from '../../services/contentService';
-import { generateWeeklyIdeasWithAIResult } from '../../services/aiService';
+import { NicheId, WeeklyIdea, pickWeeklyIdeasFromPool, isWeekend, getBestTimeForToday, formatHHMM, formatDuration, formatLongDate, NICHE_TIME_BOOST } from '../../services/contentService';
+import { generateWeeklyIdeasWithAIResult, isPoolFallbackAvailable, callAI } from '../../services/aiService';
+import { checkAchievements } from '../../services/achievements';
 import AnimatedCard from '../../components/AnimatedCard';
 import { NicheImage, getNiche } from '../../components/NicheImage';
 import nichesData from '../../data/niches.json';
@@ -63,6 +65,8 @@ import { lightColors } from '../../styles/colors';
 import { spacing } from '../../styles/spacing';
 import PlanBadge from '../../components/PlanBadge';
 import PaywallModal from '../../components/PaywallModal';
+import PWAInstallBanner from '../../components/PWAInstallBanner';
+import PageHint from '../../components/PageHint';
 import { radius } from '../../styles/radius';
 import { typography } from '../../styles/typography';
 import { shadows } from '../../styles/shadows';
@@ -108,6 +112,7 @@ export default function HomeScreen() {
   const [goalProgress, setGoalProgress] = useState<WeeklyGoalProgress | null>(null);
   const [aiInfoMsg, setAiInfoMsg] = useState<string | null>(null);
   const [aiInfoVariant, setAiInfoVariant] = useState<'info' | 'success' | 'warn'>('info');
+  const [aiPending, setAiPending] = useState(false);
   const [todayPlan, setTodayPlan] = useState<ScheduleEntry[]>([]);
   const [dailyCardText, setDailyCardText] = useState<string | null>(null);
   const [now, setNow] = useState<Date>(new Date());
@@ -136,8 +141,8 @@ export default function HomeScreen() {
         return;
       }
     }
-    setLoading(true);
-    const picked = pickWeeklyIdeasFromPool(n, weekend);
+    const curLng = ((i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr');
+    const picked: WeeklyIdea[] = pickWeeklyIdeasFromPool(n, weekend, curLng);
     setIdeas(picked);
     setLoading(false);
     if (plan === 'free') {
@@ -150,13 +155,82 @@ export default function HomeScreen() {
       ideas: picked.map((p) => ({ day: p.day, text: p.text, source: p.source })),
       createdAt: Date.now(),
     });
+    void checkAchievements();
     const { count, shieldEarned, shieldUsed } = await recordStreakActivity();
     setStreak(count);
     setShields(await getStreakShields());
     if (shieldEarned) {
-      Alert.alert('🛡 Yeni kalkan kazandın!', '7 gün üst üste ürettin. 1 streak kalkanı hesabına eklendi.');
+      Alert.alert(t('home.shieldEarnedTitle'), t('home.shieldEarnedMsg'));
     } else if (shieldUsed) {
-      Alert.alert('🛡 Kalkan kullanıldı', 'Bir günü kaçırdın ama kalkanın seni korudu — serin devam ediyor.');
+      Alert.alert(t('home.shieldUsedTitle'), t('home.shieldUsedMsg'));
+    }
+  };
+
+  const fetchAILangIdeas = async (n: NicheId) => {
+    const days: WeeklyIdea['day'][] = isWeekend()
+      ? ['monday', 'wednesday', 'friday', 'saturday']
+      : ['monday', 'wednesday', 'friday'];
+    const lng = ((i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr');
+    setAiPending(true);
+    setAiInfoMsg(t('home.toastAIPending'));
+    setAiInfoVariant('info');
+    const overallTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+    const runOnce = async (): Promise<Array<WeeklyIdea | null>> => {
+      const promises = days.map(async (day) => {
+        try {
+          const r = await callAI('variants', n, lng, `${n} ${day} content idea`);
+          const lines = r.text
+            .split('\n')
+            .map((l) => l.replace(/^[\s\-\d\.\)\*]+/, '').trim())
+            .filter((l) => l.length > 8);
+          return { day, text: lines[0] ?? `${t(`home.${day}`)} ${t(`niches.${n}`, n)}`, source: 'ai' as const };
+        } catch (err) {
+          console.warn(`AI call failed for day ${day}:`, err);
+          return null;
+        }
+      });
+      return Promise.race([
+        Promise.all(promises),
+        new Promise<Array<WeeklyIdea | null>>((resolve) => setTimeout(() => resolve(days.map(() => null)), 3000)),
+      ]);
+    };
+
+    let valid: WeeklyIdea[] = [];
+    const firstResults = await Promise.race([runOnce(), overallTimeout.then(() => null)]);
+    if (Array.isArray(firstResults)) {
+      const ok = (firstResults as Array<WeeklyIdea | null | undefined>).filter(
+        (r): r is WeeklyIdea => !!r && r.text.length > 8
+      );
+      if (ok.length > 0) {
+        valid = ok;
+      }
+    }
+
+    if (valid.length === 0) {
+      const secondResults = await Promise.race([
+        runOnce(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+      ]);
+      if (Array.isArray(secondResults)) {
+        const ok = (secondResults as Array<WeeklyIdea | null | undefined>).filter(
+          (r): r is WeeklyIdea => !!r && r.text.length > 8
+        );
+        if (ok.length > 0) valid = ok;
+      }
+    }
+
+    setAiPending(false);
+    setAiInfoMsg(null);
+
+    if (valid.length > 0) {
+      setIdeas(valid);
+      await saveWeekToHistory({
+        weekId,
+        niche: n,
+        ideas: valid.map((v) => ({ day: v.day, text: v.text, source: v.source })),
+        createdAt: Date.now(),
+      });
+      void checkAchievements();
     }
   };
 
@@ -192,6 +266,10 @@ export default function HomeScreen() {
       setGoalTarget(goal);
       setGoalProgress(gProg);
       await loadPool(n);
+      const curLng = (i18n.language || 'en').split('-')[0];
+      if (curLng !== 'tr') {
+        fetchAILangIdeas(n).catch(() => {});
+      }
     })();
   }, []);
 
@@ -201,6 +279,15 @@ export default function HomeScreen() {
     const interval = setInterval(tick, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stats = await getIdeaStats();
+      if (!cancelled) setIdeaStats(stats);
+    })();
+    return () => { cancelled = true; };
+  }, [i18n.language]);
 
   const loadTodayPlan = useCallback(async () => {
     const list = await getScheduleForDate(todayDateKey);
@@ -212,6 +299,24 @@ export default function HomeScreen() {
     const target = overrideNiche !== undefined ? overrideNiche : niche;
     const card = await getDailyCard(target);
     setDailyCardText(card.idea);
+    const lng = ((i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr');
+    if (lng !== 'tr' && target && (!card.idea || card.idea.length < 8)) {
+      try {
+        const overallTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 6000));
+        const r = await Promise.race([
+          callAI('variants', target, lng, `${target} daily inspiration question`),
+          overallTimeout.then(() => null),
+        ]);
+        if (r && (r as any).text) {
+          const txt = (r as any).text as string;
+          const first = txt
+            .split('\n')
+            .map((l) => l.replace(/^[\s\-\d\.\)\*]+/, '').trim())
+            .filter((l) => l.length > 8)[0];
+          if (first) setDailyCardText(first);
+        }
+      } catch {}
+    }
   }, [niche]);
 
   useFocusEffect(
@@ -244,17 +349,17 @@ export default function HomeScreen() {
     await loadPool(niche);
     setPoolLoading(false);
     setToastVariant('success');
-    setToastMsg(`📚 Havuzdan ${ideas.length} yeni fikir`);
+    setToastMsg(t('home.toastPoolRefresh', { count: ideas.length }));
     setTimeout(() => setToastMsg(null), 2000);
   };
 
   const refreshFromAI = async () => {
     if (!niche) return;
     setAiLoading(true);
-    setAiInfoMsg('⏳ AI düşünüyor...');
-    setAiInfoVariant('info');
-    setToastVariant('info');
-    setToastMsg('⏳ AI düşünüyor...');
+    setAiInfoMsg(t('home.toastAIPending'));
+    setAiInfoVariant('success');
+    setToastVariant('success');
+    setToastMsg(t('home.toastAIFresh'));
     setTimeout(() => setToastMsg(null), 2000);
     const currentTexts = ideas.map((i) => i.text);
     const result = await generateWeeklyIdeasWithAIResult(niche, currentTexts);
@@ -266,30 +371,21 @@ export default function HomeScreen() {
         ideas: result.ideas.map((a) => ({ day: a.day, text: a.text, source: a.source })),
         createdAt: Date.now(),
       });
+      void checkAchievements();
       setIdeaStats(await getIdeaStats());
-      if (result.fallbackUsed) {
-        setAiInfoMsg('⚠️ AI şu an yanıt vermedi. Akıllı havuzdan yeni bir fikir seçildi.');
-        setAiInfoVariant('warn');
-        setToastVariant('warn');
-        setToastMsg('⚠️ Havuzdan fikir seçildi');
-      } else if (result.usedVariant && result.usedVariant !== 'detailed') {
-        setAiInfoMsg(`🤖 AI "${result.usedVariant}" yedek prompt ile cevap verdi.`);
-        setAiInfoVariant('info');
-        setToastVariant('info');
-        setToastMsg(`🤖 Yedek prompt ile ${result.ideas.length} fikir`);
-      } else {
-        setAiInfoMsg(`✨ Yeni fikir geldi (${result.ideas.length} adet)`);
-        setAiInfoVariant('success');
-        setToastVariant('success');
-        setToastMsg(`✨ Yeni fikir geldi`);
-      }
+      setAiInfoMsg(t('home.toastAIFreshWithCount', { count: result.ideas.length }));
+      setAiInfoVariant('success');
+      setToastVariant('success');
+      setToastMsg(t('home.toastAIFresh'));
       setTimeout(() => setAiInfoMsg(null), 3000);
       setTimeout(() => setToastMsg(null), 2500);
     } else {
-      setAiInfoMsg('⚠️ AI şu an yanıt vermedi. Akıllı havuzdan yeni bir fikir seçildi.');
+      setAiInfoMsg(t('home.toastAIEmpty'));
       setAiInfoVariant('warn');
-      setTimeout(() => setAiInfoMsg(null), 3000);
-      Alert.alert('AI şu an cevap veremedi. Havuzdan yenilemeyi deneyin.');
+      setToastVariant('warn');
+      setToastMsg(t('home.toastAIEmpty'));
+      setTimeout(() => setAiInfoMsg(null), 4000);
+      setTimeout(() => setToastMsg(null), 4000);
     }
     setAiLoading(false);
   };
@@ -328,7 +424,7 @@ export default function HomeScreen() {
       const np = await incrementWeeklyGoalProgress();
       setGoalProgress(np);
       if (!beforeAchieved && np.achieved) {
-        Alert.alert('🎉 Tebrikler!', `Bu haftaki hedefine ulaştın (${np.target} fikir).`);
+        Alert.alert(t('home.goalAchieveTitle'), t('home.goalAchieveMsg', { target: np.target }));
       }
     } else {
       const np = await decrementWeeklyGoalProgress();
@@ -376,10 +472,10 @@ export default function HomeScreen() {
     setIdeas([]);
     setLoading(true);
     setAiInfoMsg(null);
-    setAiInfoMsg(`✨ Niş "${id}" olarak değişti. Yeni fikirler yükleniyor...`);
+    setAiInfoMsg(t('home.infoNicheChanged', { name: t(`niches.${id}`, id) }));
     setAiInfoVariant('info');
     setToastVariant('info');
-    setToastMsg(`🔄 Niş değişti: yeni fikirler geliyor`);
+    setToastMsg(t('home.toastNicheChanged'));
     setTimeout(() => setToastMsg(null), 2200);
     setTimeout(() => setAiInfoMsg(null), 3500);
     await loadPool(id);
@@ -400,8 +496,8 @@ export default function HomeScreen() {
   const onShare = async (idea: string) => {
     try {
       await Share.share({
-        message: `İçerik fikri: ${idea}`,
-        title: 'Compass — İlham Pusulam',
+        message: t('home.shareMsg', { idea }),
+        title: t('home.shareTitle'),
       });
     } catch (e) {
       console.warn('share error', e);
@@ -427,7 +523,7 @@ export default function HomeScreen() {
       const np = await incrementWeeklyGoalProgress();
       setGoalProgress(np);
       if (!beforeAchieved && np.achieved) {
-        Alert.alert('🎉 Tebrikler!', `Bu haftaki hedefine ulaştın (${np.target} fikir).`);
+        Alert.alert(t('home.goalAchieveTitle'), t('home.goalAchieveMsg', { target: np.target }));
       }
     }
   };
@@ -449,6 +545,30 @@ export default function HomeScreen() {
   };
 
   const askNotifications = async () => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+      const s = (navigator as any).standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (/Mac/.test(ua) && (navigator as any).maxTouchPoints > 1);
+      if (!s && isIOS) {
+        Alert.alert(
+          t('home.notifIosTitle'),
+          t('home.notifIosBody')
+        );
+        return;
+      }
+      try {
+        if ('Notification' in window) {
+          let perm = window.Notification.permission;
+          if (perm === 'default') perm = await window.Notification.requestPermission();
+          setNotifStatus(perm === 'granted' ? 'granted' : perm === 'denied' ? 'denied' : 'undetermined');
+        }
+        return;
+      } catch (e) {
+        console.warn('web notification error', e);
+        return;
+      }
+    }
     const { status } = await Notifications.requestPermissionsAsync();
     setNotifStatus(status as 'granted' | 'denied' | 'undetermined');
   };
@@ -463,15 +583,47 @@ export default function HomeScreen() {
 
   if (!niche) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.emptyText}>{t('home.noIdeas')}</Text>
-      </View>
+      <>
+        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+          <View style={styles.welcomeWrap}>
+            <Text style={styles.welcomeEmoji}>🧭</Text>
+            <Text style={styles.welcomeTitle}>{t('home.welcomeTitle', 'Hoş geldin!')}</Text>
+            <Text style={styles.welcomeSub}>{t('home.welcomeSub', 'İlham almak için bir niş seç — haftalık fikirler burada hazır olacak.')}</Text>
+            <Pressable
+              onPress={openNichePicker}
+              style={styles.welcomeCta}
+            >
+              <Text style={styles.welcomeCtaText}>{t('home.welcomeCta', 'Niş Seç ✨')}</Text>
+            </Pressable>
+            <Text style={styles.welcomeHint}>{t('home.welcomeHint', 'İstediğin zaman ayarlardan değiştirebilirsin.')}</Text>
+          </View>
+        </ScrollView>
+        {nichePickerOpen && (
+          <InlineNichePicker
+            currentNiche={niche}
+            niches={nichesData}
+            onClose={closeNichePicker}
+            onPick={pickNicheInline}
+            title={t('home.changeNiche')}
+            t={t}
+          />
+        )}
+        <PaywallModal
+          visible={paywallOpen}
+          onClose={() => setPaywallOpen(false)}
+          usage={usage}
+          reason={paywallReason}
+          nicheName={paywallNicheName}
+        />
+        <PWAInstallBanner />
+      </>
     );
   }
 
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <PageHint hintId="home" title={t('pageHints.home.title')} description={t('pageHints.home.desc')} />
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{t('home.weeklyTitle')}</Text>
@@ -507,14 +659,14 @@ export default function HomeScreen() {
           <NicheImage nicheId={niche} size={72} borderRadius={18} />
           <View style={{ flex: 1, marginLeft: 14 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.nicheHeroLabel}>BU HAFTANIN NİŞİ</Text>
+              <Text style={styles.nicheHeroLabel}>{t('home.thisWeekNiche')}</Text>
               <PlanBadge size="sm" refreshKey={planRefresh} />
             </View>
             <Text style={styles.nicheHeroTitle}>{t(`niches.${niche}`, niche)}</Text>
             <Text style={styles.nicheHeroSub}>{nichesData.find((x) => x.id === niche)?.description ?? ''}</Text>
           </View>
           <Pressable onPress={openNichePicker} style={styles.nicheHeroBtn} hitSlop={6}>
-            <Text style={styles.nicheHeroBtnText}>Değiştir</Text>
+            <Text style={styles.nicheHeroBtnText}>{t('home.change')}</Text>
           </Pressable>
         </View>
       )}
@@ -538,7 +690,7 @@ export default function HomeScreen() {
                   <Text style={[styles.timeWidgetBadge, { color: nicheColor }]}>{t('home.bestTimeBadge')}</Text>
                   <Text style={styles.timeWidgetTime}>{formatHHMM(bestT.hour, bestT.minute)}</Text>
                   <Text style={styles.timeWidgetDate}>
-                    {bestT.isNow ? '🔥 ' + t('home.onAir') : `🎯 ${t('home.goldHourIn')} ${formatDurationTR(bestT.minutesUntil)}`}
+                    {bestT.isNow ? '🔥 ' + t('home.onAir') : `🎯 ${t('home.goldHourIn')} ${formatDuration(bestT.minutesUntil)}`}
                   </Text>
                 </View>
               </View>
@@ -616,10 +768,10 @@ export default function HomeScreen() {
           ]}
         >
           <Text style={styles.notifPillText}>
-            {notifStatus === 'denied' ? '🔕 Bildirimler kapalı' : '🔔 Bildirim izni ver'}
+            {notifStatus === 'denied' ? t('home.notifDenied') : t('home.notifGranted')}
           </Text>
           <Text style={styles.notifPillHint}>
-            {notifStatus === 'denied' ? 'Ayarlardan açabilirsin' : 'Hatırlatma alabilmek için dokun'}
+            {notifStatus === 'denied' ? t('home.notifDeniedHint') : t('home.notifHint')}
           </Text>
         </Pressable>
       )}
@@ -627,14 +779,14 @@ export default function HomeScreen() {
       {streak === 0 && daysToNextWeek > 0 && (
         <View style={styles.countdownPill}>
           <Text style={styles.countdownText}>
-            🗓 Yeni haftaya {daysToNextWeek} gün var. Şimdiden fikir biriktirmeye başla!
+            {t('home.countdown', { count: daysToNextWeek })}
           </Text>
         </View>
       )}
 
       {todayDone > 0 && (
         <View style={styles.todayPill}>
-          <Text style={styles.todayPillText}>Bugün {todayDone} fikir ürettin</Text>
+          <Text style={styles.todayPillText}>{t('home.todayDone', { count: todayDone })}</Text>
         </View>
       )}
 
@@ -643,14 +795,14 @@ export default function HomeScreen() {
           <View style={styles.goalHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.goalTitle}>
-                {goalProgress.achieved ? '🏆 Hedefe ulaştın!' : '🎯 Haftalık hedef'}
+                {goalProgress.achieved ? t('home.goalAchieved') : t('home.goalTitle')}
               </Text>
               <Text style={styles.goalSubtitle}>
-                {goalProgress.completed}/{goalProgress.target} fikir üretildi · {weekId}
+                {t('home.goalSub', { done: goalProgress.completed, target: goalProgress.target, week: weekId })}
               </Text>
             </View>
             <Pressable onPress={onPickGoal} style={styles.goalPickBtn}>
-              <Text style={styles.goalPickBtnText}>Değiştir</Text>
+              <Text style={styles.goalPickBtnText}>{t('home.change')}</Text>
             </Pressable>
           </View>
           <View style={styles.goalBarBg}>
@@ -687,23 +839,23 @@ export default function HomeScreen() {
             style={[styles.dailyCard, { backgroundColor: nicheColor + '18', borderColor: nicheColor }]}
           >
             <View style={styles.dailyCardHead}>
-              <Text style={[styles.dailyCardBadge, { color: nicheColor }]}>🌟 GÜNÜN KARTI</Text>
+              <Text style={[styles.dailyCardBadge, { color: nicheColor }]}>{t('home.dailyCardBadge')}</Text>
               <Animated.Text style={[styles.dailyCardChev, { transform: [{ rotate: dailyRotate }] }]}>
                 ↻
               </Animated.Text>
             </View>
             <Text style={styles.dailyCardText} numberOfLines={3}>
-              {dailyCardFlipped ? '✨ Detaylı açıyı görmek için tam ekranı aç' : dailyCardText}
+              {dailyCardFlipped ? t('home.dailyCardFlipped') : dailyCardText}
             </Text>
             <Text style={styles.dailyCardHint}>
-              {dailyCardFlipped ? '↩ Geri çevirmek için tekrar dokun' : 'Çevirmek için karta dokun ↻'}
+              {dailyCardFlipped ? t('home.dailyCardHintBack') : t('home.dailyCardHintFront')}
             </Text>
             <Pressable
               onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/daily-card', params: { niche: niche ?? '' } }); }}
               hitSlop={8}
               style={[styles.dailyCardOpenBtn, { backgroundColor: nicheColor }]}
             >
-              <Text style={styles.dailyCardOpenBtnText}>Tam ekran ›</Text>
+              <Text style={styles.dailyCardOpenBtnText}>{t('home.dailyCardOpenBtn')}</Text>
             </Pressable>
           </Pressable>
         );
@@ -714,9 +866,9 @@ export default function HomeScreen() {
         style={styles.moodEntryCard}
       >
         <View style={styles.moodEntryLeft}>
-          <Text style={styles.moodEntryBadge}>🎭 RUH HALİNE GÖRE</Text>
-          <Text style={styles.moodEntryTitle}>Bugün nasıl hissediyorsun?</Text>
-          <Text style={styles.moodEntrySub}>6 farklı tonda fikir — enerjikten sakine, yorgundan eğlenceliye</Text>
+          <Text style={styles.moodEntryBadge}>{t('home.moodBadge')}</Text>
+          <Text style={styles.moodEntryTitle}>{t('home.moodTitle')}</Text>
+          <Text style={styles.moodEntrySub}>{t('home.moodSub')}</Text>
           <View style={styles.moodEntryChips}>
             <Text style={styles.moodChip}>⚡️</Text>
             <Text style={styles.moodChip}>🌿</Text>
@@ -724,7 +876,7 @@ export default function HomeScreen() {
             <Text style={styles.moodChip}>🌙</Text>
             <Text style={styles.moodChip}>📖</Text>
             <Text style={styles.moodChip}>🎉</Text>
-            <Text style={styles.moodChipText}>+ daha fazla</Text>
+            <Text style={styles.moodChipText}>{t('home.moodMore')}</Text>
           </View>
         </View>
         <Text style={styles.moodEntryChev}>›</Text>
@@ -735,9 +887,9 @@ export default function HomeScreen() {
         style={styles.pomodoroEntryCard}
       >
         <View style={styles.pomodoroEntryLeft}>
-          <Text style={styles.pomodoroEntryBadge}>⏱ ODAKLANMA</Text>
-          <Text style={styles.pomodoroEntryTitle}>Pomodoro Zamanlayıcısı</Text>
-          <Text style={styles.pomodoroEntrySub}>25dk odak · 5dk mola — fikirle birlikte çalış</Text>
+          <Text style={styles.pomodoroEntryBadge}>{t('home.pomodoroBadge')}</Text>
+          <Text style={styles.pomodoroEntryTitle}>{t('home.pomodoroTitle')}</Text>
+          <Text style={styles.pomodoroEntrySub}>{t('home.pomodoroSub')}</Text>
         </View>
         <View style={styles.pomodoroEntryRight}>
           <Text style={styles.pomodoroEntryIcon}>⏱</Text>
@@ -750,9 +902,9 @@ export default function HomeScreen() {
         style={styles.hooksEntryCard}
       >
         <View style={styles.hooksEntryLeft}>
-          <Text style={styles.hooksEntryBadge}>🎣 HOOK ÜRETİCİ</Text>
-          <Text style={styles.hooksEntryTitle}>Dikkat çeken açılışlar</Text>
-          <Text style={styles.hooksEntrySub}>6 stil × 5 format — 30 hook bir tıkla</Text>
+          <Text style={styles.hooksEntryBadge}>{t('home.hooksBadge')}</Text>
+          <Text style={styles.hooksEntryTitle}>{t('home.hooksTitle')}</Text>
+          <Text style={styles.hooksEntrySub}>{t('home.hooksSub')}</Text>
         </View>
         <View style={styles.hooksEntryRight}>
           <Text style={styles.hooksEntryIcon}>🎣</Text>
@@ -765,9 +917,9 @@ export default function HomeScreen() {
         style={styles.calendarEntryCard}
       >
         <View style={styles.calendarEntryLeft}>
-          <Text style={styles.calendarEntryBadge}>📅 İÇERİK TAKVİMİ</Text>
-          <Text style={styles.calendarEntryTitle}>En iyi paylaşım zamanları</Text>
-          <Text style={styles.calendarEntrySub}>Niche özel skor — slot planlayıcı</Text>
+          <Text style={styles.calendarEntryBadge}>{t('home.calendarBadge')}</Text>
+          <Text style={styles.calendarEntryTitle}>{t('home.calendarTitle')}</Text>
+          <Text style={styles.calendarEntrySub}>{t('home.calendarSub')}</Text>
         </View>
         <View style={styles.calendarEntryRight}>
           <Text style={styles.calendarEntryIcon}>📅</Text>
@@ -780,9 +932,9 @@ export default function HomeScreen() {
         style={styles.repurposeEntryCard}
       >
         <View style={styles.repurposeEntryLeft}>
-          <Text style={styles.repurposeEntryBadge}>♻️ REPURPOSE ENGINE</Text>
-          <Text style={styles.repurposeEntryTitle}>Bir içeriği 8 platforma taşı</Text>
-          <Text style={styles.repurposeEntrySub}>Caption + hashtag + format önerisi</Text>
+          <Text style={styles.repurposeEntryBadge}>{t('home.repurposeBadge')}</Text>
+          <Text style={styles.repurposeEntryTitle}>{t('home.repurposeTitle')}</Text>
+          <Text style={styles.repurposeEntrySub}>{t('home.repurposeSub')}</Text>
         </View>
         <View style={styles.repurposeEntryRight}>
           <Text style={styles.repurposeEntryIcon}>♻️</Text>
@@ -795,9 +947,9 @@ export default function HomeScreen() {
         style={styles.contentSeriesEntryCard}
       >
         <View style={styles.contentSeriesEntryLeft}>
-          <Text style={styles.contentSeriesEntryBadge}>🎬 CONTENT SERIES</Text>
-          <Text style={styles.contentSeriesEntryTitle}>7 bölümlük seri planla</Text>
-          <Text style={styles.contentSeriesEntrySub}>Anlatı arkı + bölüm senaryosu</Text>
+          <Text style={styles.contentSeriesEntryBadge}>{t('home.seriesBadge')}</Text>
+          <Text style={styles.contentSeriesEntryTitle}>{t('home.seriesTitle')}</Text>
+          <Text style={styles.contentSeriesEntrySub}>{t('home.seriesSub')}</Text>
         </View>
         <View style={styles.contentSeriesEntryRight}>
           <Text style={styles.contentSeriesEntryIcon}>🎬</Text>
@@ -810,9 +962,9 @@ export default function HomeScreen() {
         style={styles.personaEntryCard}
       >
         <View style={styles.personaEntryLeft}>
-          <Text style={styles.personaEntryBadge}>🎯 AUDIENCE PERSONA</Text>
-          <Text style={styles.personaEntryTitle}>Kime yazıyorsun?</Text>
-          <Text style={styles.personaEntrySub}>Ton + kelime hazinesi + hook kalıbı</Text>
+          <Text style={styles.personaEntryBadge}>{t('home.personaBadge')}</Text>
+          <Text style={styles.personaEntryTitle}>{t('home.personaTitle')}</Text>
+          <Text style={styles.personaEntrySub}>{t('home.personaSub')}</Text>
         </View>
         <View style={styles.personaEntryRight}>
           <Text style={styles.personaEntryIcon}>🎯</Text>
@@ -825,9 +977,9 @@ export default function HomeScreen() {
         style={styles.performanceEntryCard}
       >
         <View style={styles.performanceEntryLeft}>
-          <Text style={styles.performanceEntryBadge}>📊 PERFORMANCE TRACKER</Text>
-          <Text style={styles.performanceEntryTitle}>İçerik performansını analiz et</Text>
-          <Text style={styles.performanceEntrySub}>Platform + format + hook kazananları</Text>
+          <Text style={styles.performanceEntryBadge}>{t('home.performanceBadge')}</Text>
+          <Text style={styles.performanceEntryTitle}>{t('home.performanceTitle')}</Text>
+          <Text style={styles.performanceEntrySub}>{t('home.performanceSub')}</Text>
         </View>
         <View style={styles.performanceEntryRight}>
           <Text style={styles.performanceEntryIcon}>📊</Text>
@@ -840,9 +992,9 @@ export default function HomeScreen() {
         style={styles.ideaBankEntryCard}
       >
         <View style={styles.ideaBankEntryLeft}>
-          <Text style={styles.ideaBankEntryBadge}>💡 IDEA BANK / FİKİR HAVUZU</Text>
-          <Text style={styles.ideaBankEntryTitle}>Fikirlerini biriktir, organize et</Text>
-          <Text style={styles.ideaBankEntrySub}>Ham fikir → geliştirme → hazır → kullanıldı</Text>
+          <Text style={styles.ideaBankEntryBadge}>{t('home.ideaBankBadge')}</Text>
+          <Text style={styles.ideaBankEntryTitle}>{t('home.ideaBankTitle')}</Text>
+          <Text style={styles.ideaBankEntrySub}>{t('home.ideaBankSub')}</Text>
         </View>
         <View style={styles.ideaBankEntryRight}>
           <Text style={styles.ideaBankEntryIcon}>💡</Text>
@@ -853,7 +1005,7 @@ export default function HomeScreen() {
       {recentCopies.length > 0 && (
         <View style={styles.recentCopiesBox}>
           <View style={styles.recentCopiesHead}>
-            <Text style={styles.recentCopiesTitle}>📋 Son kopyalananlar</Text>
+            <Text style={styles.recentCopiesTitle}>{t('home.recentCopies')}</Text>
             <Text style={styles.recentCopiesCount}>{recentCopies.length}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentScroll}>
@@ -872,8 +1024,8 @@ export default function HomeScreen() {
 
       {weekend && (
         <View style={styles.weekendBanner}>
-          <Text style={styles.weekendTitle}>� Hafta sonu modu</Text>
-          <Text style={styles.weekendSub}>Sana ekstra bir bonus fikir ekledik. İyi içerikler!</Text>
+          <Text style={styles.weekendTitle}>{t('home.weekendTitle')}</Text>
+          <Text style={styles.weekendSub}>{t('home.weekendSub')}</Text>
         </View>
       )}
 
@@ -881,16 +1033,19 @@ export default function HomeScreen() {
         <View style={styles.todayPlanCard}>
           <View style={styles.todayPlanHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.todayPlanTitle}>📅 Bugünün planı</Text>
+              <Text style={styles.todayPlanTitle}>{t('home.todayPlanTitle')}</Text>
               <Text style={styles.todayPlanSub}>
-                {todayPlan.filter((e) => e.done).length}/{todayPlan.length} tamamlandı
+                {t('home.todayPlanSub', {
+                  done: todayPlan.filter((e) => e.done).length,
+                  total: todayPlan.length,
+                })}
               </Text>
             </View>
             <Pressable onPress={() => router.push('/weekly-planner')} style={styles.todayPlanWeekBtn}>
-              <Text style={styles.todayPlanWeekBtnText}>Haftayı Planla</Text>
+              <Text style={styles.todayPlanWeekBtnText}>{t('home.todayPlanPlanBtn')}</Text>
             </Pressable>
             <Pressable onPress={openCalendar} style={styles.todayPlanOpenBtn}>
-              <Text style={styles.todayPlanOpenBtnText}>Takvim →</Text>
+              <Text style={styles.todayPlanOpenBtnText}>{t('home.todayPlanOpenBtn')}</Text>
             </Pressable>
           </View>
           {todayPlan.slice(0, 4).map((entry) => (
@@ -910,7 +1065,7 @@ export default function HomeScreen() {
             </Pressable>
           ))}
           {todayPlan.length > 4 && (
-            <Text style={styles.todayPlanMore}>+{todayPlan.length - 4} daha — takvime git</Text>
+            <Text style={styles.todayPlanMore}>{t('home.todayPlanMore', { count: todayPlan.length - 4 })}</Text>
           )}
         </View>
       )}
@@ -954,10 +1109,10 @@ export default function HomeScreen() {
             style={[styles.heroCard, doneSet.has(ideas[0].text) && styles.heroCardDone]}
             onPress={() => onDone(ideas[0].text)}
           >
-            <Text style={styles.heroLabel}>{doneSet.has(ideas[0].text) ? '✓ ÜRETILDI' : '⭐ Haftanın fikri'}</Text>
+            <Text style={styles.heroLabel}>{doneSet.has(ideas[0].text) ? t('home.heroLabelDone') : t('home.heroLabelActive')}</Text>
             <Text style={[styles.heroText, doneSet.has(ideas[0].text) && styles.heroTextDone]} numberOfLines={3}>{ideas[0].text}</Text>
             <View style={styles.heroFooter}>
-              <Text style={styles.heroHint}>Karta dokun → {doneSet.has(ideas[0].text) ? 'geri al' : 'üretildi olarak işaretle'}</Text>
+              <Text style={styles.heroHint}>{doneSet.has(ideas[0].text) ? t('home.heroHintUnmark') : t('home.heroHintMark')}</Text>
               <Text style={styles.heroDay}>{t(`home.${ideas[0].day}`)}</Text>
             </View>
           </Pressable>
@@ -968,8 +1123,8 @@ export default function HomeScreen() {
         <View style={styles.skeletonCard}>
           <View style={styles.skeletonPulse}>
             <Text style={styles.skeletonIcon}>💡</Text>
-            <Text style={styles.skeletonTitle}>{aiLoading ? '✨ AI düşünüyor…' : '📚 Yeni fikirler hazırlanıyor…'}</Text>
-            <Text style={styles.skeletonSub}>Yaklaşık 1-2 saniye</Text>
+            <Text style={styles.skeletonTitle}>{aiLoading ? t('home.skeletonAI') : t('home.skeletonPool')}</Text>
+            <Text style={styles.skeletonSub}>{t('home.skeletonSub')}</Text>
           </View>
           {[0, 1, 2].map((i) => (
             <View key={`skel-${i}`} style={[styles.skeletonRow, i === 0 && { marginTop: 10 }]}>
@@ -986,12 +1141,12 @@ export default function HomeScreen() {
         const isDone = doneSet.has(idea.text);
         const renderRight = () => (
           <View style={styles.swipeRight}>
-            <Text style={styles.swipeText}>🗒 KOPYALA</Text>
+            <Text style={styles.swipeText}>{t('home.swipeCopy')}</Text>
           </View>
         );
         const renderLeft = () => (
           <View style={[styles.swipeLeft, isFav ? styles.swipeLeftOn : null]}>
-            <Text style={styles.swipeText}>{isFav ? '★ ÇIKAR' : '☆ FAV'}</Text>
+            <Text style={styles.swipeText}>{isFav ? t('home.swipeFavRemove') : t('home.swipeFavAdd')}</Text>
           </View>
         );
         return (
@@ -1011,7 +1166,7 @@ export default function HomeScreen() {
                 <View style={styles.cardHeader}>
                   <Text style={styles.dayBadge}>{t(`home.${idea.day}`)}</Text>
                   <View style={styles.cardActions}>
-                    <Text style={styles.sourceBadge}>{idea.source === 'ai' ? '✨ AI' : '📚 Pool'}</Text>
+                    <Text style={styles.sourceBadge}>{idea.source === 'ai' ? t('home.sourceAI') : t('home.sourcePool')}</Text>
                     <Pressable
                       onPress={() => onDone(idea.text)}
                       style={[styles.iconBtn, isDone && styles.iconBtnDone]}
@@ -1034,8 +1189,8 @@ export default function HomeScreen() {
                   </View>
                 </View>
                 <Text style={[styles.ideaText, isDone && styles.ideaTextDone]}>{idea.text}</Text>
-                {copiedIdx === idx && <Text style={styles.copiedHint}>Kopyalandı</Text>}
-                {isDone && <Text style={styles.doneHint}>Üretildi</Text>}
+                {copiedIdx === idx && <Text style={styles.copiedHint}>{t('home.copiedHint')}</Text>}
+                {isDone && <Text style={styles.doneHint}>{t('home.doneHint')}</Text>}
               </Pressable>
             </Swipeable>
           </AnimatedCard>
@@ -1044,28 +1199,28 @@ export default function HomeScreen() {
 
       {ideaStats && ideaStats.totalIdeas > 0 && (
         <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>📊 Fikir istatistiklerin</Text>
+          <Text style={styles.statsTitle}>{t('home.statsTitle')}</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{ideaStats.totalIdeas}</Text>
-              <Text style={styles.statLabel}>Toplam</Text>
+              <Text style={styles.statLabel}>{t('home.statTotal')}</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{ideaStats.uniqueIdeas}</Text>
-              <Text style={styles.statLabel}>Benzersiz</Text>
+              <Text style={styles.statLabel}>{t('home.statUnique')}</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>
                 {ideaStats.mostFrequentDayLabel ?? '—'}
               </Text>
-              <Text style={styles.statLabel}>En aktif gün</Text>
+              <Text style={styles.statLabel}>{t('home.statActiveDay')}</Text>
             </View>
           </View>
           {ideaStats.mostFrequentIdea && ideaStats.mostFrequentIdea.count > 1 && (
             <View style={styles.favIdeaBox}>
-              <Text style={styles.favIdeaLabel}>Sık çıkan fikir</Text>
+              <Text style={styles.favIdeaLabel}>{t('home.favIdeaLabel')}</Text>
               <Text style={styles.favIdeaText} numberOfLines={2}>{ideaStats.mostFrequentIdea.text}</Text>
-              <Text style={styles.favIdeaCount}>{ideaStats.mostFrequentIdea.count} kez üretildi</Text>
+              <Text style={styles.favIdeaCount}>{t('home.favIdeaCount', { count: ideaStats.mostFrequentIdea.count })}</Text>
             </View>
           )}
         </View>
@@ -1085,10 +1240,12 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.actions}>
-        <Pressable style={[styles.btn, styles.btnAlt]} onPress={refreshFromPool} disabled={poolLoading}>
-          <Text style={styles.btnAltText}>{poolLoading ? '...' : t('home.poolButton')}</Text>
-        </Pressable>
-        <Pressable style={styles.btn} onPress={refreshFromAI} disabled={aiLoading || poolLoading}>
+        {isPoolFallbackAvailable() && (
+          <Pressable style={[styles.btn, styles.btnAlt]} onPress={refreshFromPool} disabled={poolLoading}>
+            <Text style={styles.btnAltText}>{poolLoading ? '...' : t('home.poolButton')}</Text>
+          </Pressable>
+        )}
+        <Pressable style={[styles.btn, !isPoolFallbackAvailable() && { flex: 1 }]} onPress={refreshFromAI} disabled={aiLoading || poolLoading}>
           {aiLoading ? (
             <ActivityIndicator color={lightColors.textInverse} />
           ) : (
@@ -1104,7 +1261,7 @@ export default function HomeScreen() {
         niches={nichesData}
         onClose={closeNichePicker}
         onPick={pickNicheInline}
-        title="Bu haftanın nişini değiştir"
+        title={t('home.changeNiche')}
         t={t}
       />
     )}
@@ -1124,6 +1281,8 @@ export default function HomeScreen() {
       reason={paywallReason}
       nicheName={paywallNicheName}
     />
+
+    <PWAInstallBanner />
     </>
   );
 }
@@ -1143,6 +1302,46 @@ const styles = StyleSheet.create({
   emptyText: {
     ...typography.body,
     color: lightColors.textMuted,
+  },
+  welcomeWrap: {
+    alignItems: 'center',
+    paddingVertical: spacing['5xl'],
+    paddingHorizontal: spacing.lg,
+  },
+  welcomeEmoji: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  welcomeTitle: {
+    ...typography.h1,
+    color: lightColors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  welcomeSub: {
+    ...typography.body,
+    color: lightColors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  welcomeCta: {
+    backgroundColor: lightColors.primary,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    ...shadows.md,
+  },
+  welcomeCtaText: {
+    color: lightColors.textInverse,
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  welcomeHint: {
+    ...typography.caption,
+    color: lightColors.textMuted,
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
   nicheHeroCard: {
     flexDirection: 'row',
@@ -2542,7 +2741,7 @@ function InlineNichePicker({ currentNiche, niches, onClose, onPick, title, t }: 
             lineHeight: 18,
           }}
         >
-          İçerik fikirleri ve planlar bu nişe göre hazırlanır.
+          {t('home.nicheHint')}
         </Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
           {niches.map((n, idx) => {
@@ -2604,11 +2803,12 @@ type InlineGoalPickerProps = {
 };
 
 function InlineGoalPicker({ currentTarget, onClose, onPick }: InlineGoalPickerProps) {
+  const { t } = useTranslation();
   const options: WeeklyGoalTarget[] = [3, 5, 7];
   const meta: Record<WeeklyGoalTarget, { label: string; emoji: string; sub: string }> = {
-    3: { label: '3 fikir', emoji: '🌱', sub: 'Hafif başla — sürdürülebilir' },
-    5: { label: '5 fikir', emoji: '🎯', sub: 'Dengeli — haftalık hedef' },
-    7: { label: '7 fikir', emoji: '🚀', sub: 'Yoğun — her gün üret' },
+    3: { label: t('goal.option3'), emoji: '🌱', sub: t('goal.sub3') },
+    5: { label: t('goal.option5'), emoji: '🎯', sub: t('goal.sub5') },
+    7: { label: t('goal.option7'), emoji: '🚀', sub: t('goal.sub7') },
   };
   return (
     <View
@@ -2672,7 +2872,7 @@ function InlineGoalPicker({ currentTarget, onClose, onPick }: InlineGoalPickerPr
           }}
         >
           <Text style={{ fontSize: 20, fontWeight: '800', color: lightColors.text }}>
-            🎯 Haftalık Hedef
+            {t('goal.title')}
           </Text>
           <Pressable
             onPress={onClose}
@@ -2697,7 +2897,7 @@ function InlineGoalPicker({ currentTarget, onClose, onPick }: InlineGoalPickerPr
             lineHeight: 18,
           }}
         >
-          Bu hafta kaç fikir üretmek istiyorsun?
+          {t('goal.hint')}
         </Text>
         {options.map((n) => {
           const isSel = currentTarget === n;

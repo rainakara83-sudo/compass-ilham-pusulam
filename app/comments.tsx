@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { checkAchievements } from '../services/achievements';
 import {
   CommentCategory,
   CommentTemplate,
@@ -22,13 +24,13 @@ import {
   resetCommentTemplates,
 } from '../services/storage';
 
-const CATEGORY_META: Record<CommentCategory, { icon: string; label: string; color: string }> = {
-  fire: { icon: '🔥', label: 'Beğeni', color: '#F59E0B' },
-  love: { icon: '❤️', label: 'Sevgi', color: '#EC4899' },
-  question: { icon: '❓', label: 'Soru', color: '#4D96FF' },
-  tip: { icon: '💡', label: 'Öneri', color: '#10B981' },
-  shoutout: { icon: '📢', label: 'Tanıtım', color: '#8B5CF6' },
-  custom: { icon: '⭐', label: 'Özel', color: '#6B7280' },
+const CATEGORY_META: Record<CommentCategory, { icon: string; color: string; key: string }> = {
+  fire: { icon: '🔥', color: '#F59E0B', key: 'catFire' },
+  love: { icon: '❤️', color: '#EC4899', key: 'catLove' },
+  question: { icon: '❓', color: '#4D96FF', key: 'catQuestion' },
+  tip: { icon: '💡', color: '#10B981', key: 'catTip' },
+  shoutout: { icon: '📢', color: '#8B5CF6', key: 'catShoutout' },
+  custom: { icon: '⭐', color: '#6B7280', key: 'catCustom' },
 };
 
 const CATEGORIES_ORDER: CommentCategory[] = ['fire', 'love', 'question', 'tip', 'shoutout', 'custom'];
@@ -36,6 +38,7 @@ const CATEGORIES_ORDER: CommentCategory[] = ['fire', 'love', 'question', 'tip', 
 export default function CommentsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t, i18n } = useTranslation();
   const [templates, setTemplates] = useState<CommentTemplate[] | null>(null);
   const [filter, setFilter] = useState<CommentCategory | 'all'>('all');
   const [showAdd, setShowAdd] = useState(false);
@@ -46,7 +49,7 @@ export default function CommentsScreen() {
   const load = useCallback(async () => {
     const list = await getCommentTemplates();
     setTemplates(list);
-  }, []);
+  }, [i18n.language]);
 
   useFocusEffect(
     useCallback(() => {
@@ -61,10 +64,10 @@ export default function CommentsScreen() {
   };
 
   const onDelete = (tpl: CommentTemplate) => {
-    Alert.alert('Şablonu sil', `“${tpl.text.slice(0, 40)}${tpl.text.length > 40 ? '…' : ''}” silinsin mi?`, [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('comments.deleteTitle'), t('comments.deleteBody', { text: `"${tpl.text.slice(0, 40)}${tpl.text.length > 40 ? '…' : ''}"` }), [
+      { text: t('comments.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           const next = await removeCommentTemplate(tpl.id);
@@ -76,12 +79,12 @@ export default function CommentsScreen() {
 
   const onReset = () => {
     Alert.alert(
-      'Varsayılana dön',
-      'Tüm özel şablonların silinir ve varsayılan 5 şablon geri gelir.',
+      t('comments.resetTitle'),
+      t('comments.resetBody'),
       [
-        { text: 'Vazgeç', style: 'cancel' },
+        { text: t('comments.cancelBtn'), style: 'cancel' },
         {
-          text: 'Sıfırla',
+          text: t('comments.resetConfirm'),
           style: 'destructive',
           onPress: async () => {
             const next = await resetCommentTemplates();
@@ -95,10 +98,11 @@ export default function CommentsScreen() {
   const onSaveNew = async () => {
     const trimmed = draftText.trim();
     if (trimmed.length === 0) {
-      Alert.alert('Boş bırakılamaz', 'Lütfen bir yorum yaz.');
+      Alert.alert(t('comments.emptyTitle'), t('comments.emptyBody'));
       return;
     }
     const next = await addCommentTemplate(trimmed, draftCat);
+    void checkAchievements();
     setTemplates(next);
     setDraftText('');
     setDraftCat('custom');
@@ -129,16 +133,16 @@ export default function CommentsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.headerRow}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backTxt}>‹ Geri</Text>
+          <Text style={styles.backTxt}>{t('comments.backBtn')}</Text>
         </Pressable>
-        <Text style={styles.title}>💬 Yorum Şablonları</Text>
+        <Text style={styles.title}>💬 {t('comments.title')}</Text>
         <Pressable onPress={() => setShowAdd(true)} style={styles.addBtn}>
-          <Text style={styles.addTxt}>+ Ekle</Text>
+          <Text style={styles.addTxt}>{t('comments.addBtn')}</Text>
         </Pressable>
       </View>
 
       <Text style={styles.subtitle}>
-        Sık kullandığın yorumları kaydet, tek tıkla kopyala.
+        {t('comments.subtitle')}
       </Text>
 
       <ScrollView
@@ -147,7 +151,7 @@ export default function CommentsScreen() {
         contentContainerStyle={styles.chipRow}
       >
         <FilterChip
-          label={`Tümü (${templates.length})`}
+          label={`${t('comments.filterAll')} (${templates.length})`}
           active={filter === 'all'}
           onPress={() => setFilter('all')}
           color="#111827"
@@ -155,7 +159,7 @@ export default function CommentsScreen() {
         {CATEGORIES_ORDER.map((c) => (
           <FilterChip
             key={c}
-            label={`${CATEGORY_META[c].icon} ${CATEGORY_META[c].label} (${counts[c]})`}
+            label={`${CATEGORY_META[c].icon} ${t(`comments.${CATEGORY_META[c].key}`)} (${counts[c]})`}
             active={filter === c}
             onPress={() => setFilter(c)}
             color={CATEGORY_META[c].color}
@@ -168,7 +172,7 @@ export default function CommentsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 80 }}
       >
         {visible.length === 0 ? (
-          <Text style={styles.empty}>Bu kategoride şablon yok.</Text>
+          <Text style={styles.empty}>{t('comments.emptyCat')}</Text>
         ) : (
           visible.map((tpl) => {
             const meta = CATEGORY_META[tpl.category];
@@ -178,7 +182,7 @@ export default function CommentsScreen() {
                 <View style={styles.tplHeader}>
                   <View style={[styles.tplBadge, { backgroundColor: meta.color + '22' }]}>
                     <Text style={[styles.tplBadgeTxt, { color: meta.color }]}>
-                      {meta.icon} {meta.label}
+                      {meta.icon} {t(`comments.${meta.key}`)}
                     </Text>
                   </View>
                   {tpl.id.startsWith('tpl-default-') ? null : (
@@ -193,7 +197,7 @@ export default function CommentsScreen() {
                   style={[styles.copyBtn, { backgroundColor: meta.color }, isCopied && styles.copyBtnDone]}
                 >
                   <Text style={styles.copyBtnTxt}>
-                    {isCopied ? '✓ Kopyalandı' : '📋 Kopyala'}
+                    {isCopied ? t('comments.copyDone') : t('comments.copyBtn')}
                   </Text>
                 </Pressable>
               </View>
@@ -202,18 +206,18 @@ export default function CommentsScreen() {
         )}
 
         <Pressable onPress={onReset} style={styles.resetBtn}>
-          <Text style={styles.resetTxt}>↺ Varsayılan şablonlara dön</Text>
+          <Text style={styles.resetTxt}>{t('comments.resetBtn')}</Text>
         </Pressable>
       </ScrollView>
 
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Yeni yorum şablonu</Text>
+            <Text style={styles.modalTitle}>{t('comments.modalTitle')}</Text>
             <TextInput
               value={draftText}
               onChangeText={setDraftText}
-              placeholder="Örn: Harika içerik! 🔥"
+              placeholder={t('comments.modalPlaceholder')}
               placeholderTextColor="#9CA3AF"
               style={styles.modalInput}
               multiline
@@ -222,7 +226,7 @@ export default function CommentsScreen() {
             />
             <Text style={styles.modalCounter}>{draftText.length}/200</Text>
 
-            <Text style={styles.modalLabel}>Kategori</Text>
+            <Text style={styles.modalLabel}>{t('comments.modalCategory')}</Text>
             <View style={styles.modalCatRow}>
               {CATEGORIES_ORDER.map((c) => {
                 const m = CATEGORY_META[c];
@@ -238,7 +242,7 @@ export default function CommentsScreen() {
                     ]}
                   >
                     <Text style={[styles.modalCatChipTxt, { color: active ? m.color : '#374151' }]}>
-                      {m.icon} {m.label}
+                      {m.icon} {t(`comments.${m.key}`)}
                     </Text>
                   </Pressable>
                 );
@@ -247,10 +251,10 @@ export default function CommentsScreen() {
 
             <View style={styles.modalActions}>
               <Pressable onPress={() => setShowAdd(false)} style={[styles.modalBtn, styles.modalBtnCancel]}>
-                <Text style={styles.modalBtnCancelTxt}>Vazgeç</Text>
+                <Text style={styles.modalBtnCancelTxt}>{t('comments.cancelBtn')}</Text>
               </Pressable>
               <Pressable onPress={onSaveNew} style={[styles.modalBtn, styles.modalBtnSave]}>
-                <Text style={styles.modalBtnSaveTxt}>Kaydet</Text>
+                <Text style={styles.modalBtnSaveTxt}>{t('comments.saveBtn')}</Text>
               </Pressable>
             </View>
           </View>

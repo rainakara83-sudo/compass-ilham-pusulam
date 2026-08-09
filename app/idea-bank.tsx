@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   IDEA_ANGLES,
-  IDEA_PRIORITY_LABELS,
   IDEA_REACH,
   IDEA_STATUSES,
   Idea,
@@ -30,18 +30,28 @@ import {
   addCopyToHistory,
 } from '../services/storage';
 import { NicheId } from '../services/contentService';
+import i18n, {
+  getAngleLabel,
+  getAngleHint,
+  getPriorityLabel,
+  getReachLabel,
+  getStatusLabel,
+} from '../i18n';
+import PageHint from '../components/PageHint';
 
-const STATUS_LABEL: Record<IdeaStatus, string> = {
-  raw: 'Ham',
-  developing: 'Geliştiriliyor',
-  ready: 'Hazır',
-  used: 'Kullanıldı',
-  archived: 'Arşiv',
+const STATUS_KEY: Record<IdeaStatus, string> = {
+  raw: 'statusRaw',
+  developing: 'statusDeveloping',
+  ready: 'statusReady',
+  used: 'statusUsed',
+  archived: 'statusArchived',
 };
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  const localeTag = lng === 'tr' ? 'tr-TR' : lng === 'es' ? 'es-ES' : lng === 'de' ? 'de-DE' : lng === 'fr' ? 'fr-FR' : 'en-US';
+  return d.toLocaleDateString(localeTag, { day: '2-digit', month: 'short' });
 };
 
 const priorityEmoji = (p: number): string => {
@@ -55,6 +65,7 @@ const priorityEmoji = (p: number): string => {
 export default function IdeaBankScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [list, setList] = useState<Idea[]>([]);
   const [filterStatus, setFilterStatus] = useState<IdeaStatus | 'all'>('all');
@@ -80,9 +91,15 @@ export default function IdeaBankScreen() {
     setNiche(n);
     let l = await getIdeaBank();
     if (l.length === 0 && n) {
-      l = await seedIdeaBankDemo(n);
+      const lng = (i18n.language || 'en').split('-')[0];
+      l = await seedIdeaBankDemo(n, lng);
     }
     setList(l);
+    console.log('=== Fikir Bankası Debug ===');
+    console.log('niche:', n);
+    console.log('ideas.length:', l.length);
+    console.log('first idea niche:', (l[0] as any)?.niche);
+    console.log('first idea title:', l[0]?.title);
   }, []);
 
   useEffect(() => {
@@ -97,8 +114,8 @@ export default function IdeaBankScreen() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setToast(null), 1800);
+    return () => clearTimeout(tm);
   }, [toast]);
 
   const resetForm = useCallback(() => {
@@ -137,10 +154,11 @@ export default function IdeaBankScreen() {
 
   const handleGenerateSuggestion = useCallback(() => {
     if (!niche) {
-      Alert.alert('Niche seçili değil', 'Önce ana ekrandan bir niche seç.');
+      Alert.alert(t('ideaPacks.noNicheTitle'), t('ideaPacks.noNicheBody'));
       return;
     }
-    const s = buildIdeaSuggestion(niche, Date.now());
+    const lng = (i18n.language || 'en').split('-')[0];
+    const s = buildIdeaSuggestion(niche, Date.now(), lng);
     setTitle(s.title);
     setDescription(s.description);
     setHookIdea(s.hookIdea);
@@ -148,8 +166,8 @@ export default function IdeaBankScreen() {
     setFormat(s.format);
     setReach(s.estimatedReach);
     setTagsInput(s.tags.join(', '));
-    setToast('💡 Öneri üretildi');
-  }, [niche]);
+    setToast(t('ideaPacks.suggestToast'));
+  }, [niche, t]);
 
   const parseTags = (input: string): string[] => {
     return input
@@ -161,7 +179,7 @@ export default function IdeaBankScreen() {
 
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
-      Alert.alert('Başlık gerekli', 'Fikre bir başlık ver.');
+      Alert.alert(t('ideaPacks.titleRequiredTitle'), t('ideaPacks.titleRequiredBody'));
       return;
     }
     setSaving(true);
@@ -185,61 +203,69 @@ export default function IdeaBankScreen() {
     setSaving(false);
     setShowAdd(false);
     resetForm();
-    setToast(editingId ? '✏️ Fikir güncellendi' : '💾 Fikir kaydedildi');
-  }, [title, description, hookIdea, angle, status, format, reach, priority, tagsInput, notes, editingId, resetForm]);
+    setToast(editingId ? t('ideaPacks.updatedToast') : t('ideaPacks.savedToast'));
+  }, [title, description, hookIdea, angle, status, format, reach, priority, tagsInput, notes, editingId, resetForm, t]);
 
   const handleRemove = useCallback(async (id: string) => {
     const next = await removeIdea(id);
     setList(next);
-    setToast('🗑️ Fikir silindi');
-  }, []);
+    setToast(t('ideaPacks.deletedToast'));
+  }, [t]);
 
   const handleClearAll = useCallback(() => {
     if (list.length === 0) return;
-    Alert.alert('Tüm fikirleri sil', `${list.length} kayıt silinecek. Emin misin?`, [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('ideaPacks.clearConfirmTitle'), t('ideaPacks.clearConfirmBody', { count: list.length }), [
+      { text: t('ideaPacks.cancelBtn'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await clearIdeaBank();
           setList([]);
-          setToast('🧹 Tümü silindi');
+          setToast(t('ideaPacks.clearedToast'));
         },
       },
     ]);
-  }, [list]);
+  }, [list, t]);
 
   const copyIdea = useCallback(async (idea: Idea) => {
     const lines: string[] = [];
-    lines.push(`💡 ${idea.title.toUpperCase()}`);
-    lines.push(`Açı: ${IDEA_ANGLES.find(a => a.id === idea.angle)?.label ?? idea.angle} | Format: ${idea.format} | Durum: ${STATUS_LABEL[idea.status]}`);
-    lines.push(`Öncelik: ${priorityEmoji(idea.priority)} ${IDEA_PRIORITY_LABELS[idea.priority]} | Erişim: ${IDEA_REACH[idea.estimatedReach].emoji} ${IDEA_REACH[idea.estimatedReach].label}`);
-    if (idea.tags.length > 0) lines.push(`Etiketler: ${idea.tags.map(t => '#' + t).join(' ')}`);
+    lines.push(t('ideaPacks.copyFormatTitle', { title: idea.title.toUpperCase() }));
+    lines.push(t('ideaPacks.copyFormatMeta', {
+      angle: getAngleLabel(idea.angle),
+      format: idea.format,
+      status: t(`ideaPacks.${STATUS_KEY[idea.status]}`),
+    }));
+    lines.push(t('ideaPacks.copyFormatPri', {
+      emoji: priorityEmoji(idea.priority),
+      priority: getPriorityLabel(idea.priority),
+      reach: `${IDEA_REACH[idea.estimatedReach].emoji} ${getReachLabel(idea.estimatedReach)}`,
+    }));
+    if (idea.tags.length > 0) lines.push(t('ideaPacks.copyFormatTags', { tags: idea.tags.map(t => '#' + t).join(' ') }));
     lines.push('');
     if (idea.hookIdea) {
-      lines.push(`🎯 HOOK ÖNERİSİ`);
+      lines.push(t('ideaPacks.copyFormatHook'));
       lines.push(idea.hookIdea);
       lines.push('');
     }
     if (idea.description) {
-      lines.push(`📝 AÇIKLAMA`);
+      lines.push(t('ideaPacks.copyFormatDesc'));
       lines.push(idea.description);
       lines.push('');
     }
     if (idea.notes) {
-      lines.push(`📌 NOTLAR`);
+      lines.push(t('ideaPacks.copyFormatNotes'));
       lines.push(idea.notes);
     }
     const text = lines.join('\n');
     try {
       Clipboard.setString(text);
       await addCopyToHistory(text, 'detail');
-      setToast('📋 Fikir kopyalandı');
+      setToast(t('ideaPacks.copyToast'));
     } catch {
-      setToast('Kopyalama başarısız');
+      setToast(t('ideaPacks.copyFailed'));
     }
-  }, []);
+  }, [t]);
 
   const cycleStatus = useCallback(async (idea: Idea) => {
     const order: IdeaStatus[] = ['raw', 'developing', 'ready', 'used', 'archived'];
@@ -247,8 +273,8 @@ export default function IdeaBankScreen() {
     const next = order[(idx + 1) % order.length];
     const updated = await saveIdea({ ...idea, status: next });
     setList(updated);
-    setToast(`🔄 ${STATUS_LABEL[next]}`);
-  }, []);
+    setToast(t('ideaPacks.cycleToast', { status: t(`ideaPacks.${STATUS_KEY[next]}`) }));
+  }, [t]);
 
   const filtered = useMemo(() => {
     let f = list;
@@ -290,10 +316,10 @@ export default function IdeaBankScreen() {
               <Text style={styles.ideaTitle} numberOfLines={2}>{idea.title}</Text>
               <View style={styles.ideaMetaRow}>
                 <Text style={[styles.ideaStatusChip, { color: statusInfo?.color, backgroundColor: statusInfo?.bg }]}>
-                  {statusInfo?.emoji} {STATUS_LABEL[idea.status]}
+                  {statusInfo?.emoji} {t(`ideaPacks.${STATUS_KEY[idea.status]}`)}
                 </Text>
                 <Text style={[styles.ideaReachChip, { color: reachInfo.color }]}>
-                  {reachInfo.emoji} {reachInfo.label}
+                  {reachInfo.emoji} {getReachLabel(idea.estimatedReach)}
                 </Text>
                 <Text style={styles.ideaPriority}>{priorityEmoji(idea.priority)}</Text>
               </View>
@@ -314,31 +340,31 @@ export default function IdeaBankScreen() {
 
         {idea.hookIdea ? (
           <View style={styles.ideaHookBox}>
-            <Text style={styles.ideaHookLabel}>🎯 HOOK ÖNERİSİ</Text>
+            <Text style={styles.ideaHookLabel}>{t('ideaPacks.hookLabel')}</Text>
             <Text style={styles.ideaHookText}>{idea.hookIdea}</Text>
           </View>
         ) : null}
 
         <View style={styles.ideaDetailsRow}>
           <View style={styles.ideaDetailItem}>
-            <Text style={styles.ideaDetailLabel}>FORMAT</Text>
+            <Text style={styles.ideaDetailLabel}>{t('ideaPacks.detailFormat')}</Text>
             <Text style={styles.ideaDetailValue}>{idea.format}</Text>
           </View>
           <View style={styles.ideaDetailItem}>
-            <Text style={styles.ideaDetailLabel}>ÖNCELİK</Text>
-            <Text style={styles.ideaDetailValue}>{IDEA_PRIORITY_LABELS[idea.priority]}</Text>
+            <Text style={styles.ideaDetailLabel}>{t('ideaPacks.detailPriority')}</Text>
+            <Text style={styles.ideaDetailValue}>{getPriorityLabel(idea.priority)}</Text>
           </View>
           <View style={styles.ideaDetailItem}>
-            <Text style={styles.ideaDetailLabel}>TARİH</Text>
+            <Text style={styles.ideaDetailLabel}>{t('ideaPacks.detailDate')}</Text>
             <Text style={styles.ideaDetailValue}>{formatDate(idea.updatedAt)}</Text>
           </View>
         </View>
 
         {idea.tags.length > 0 && (
           <View style={styles.ideaTagsRow}>
-            {idea.tags.map((t, i) => (
+            {idea.tags.map((tg, i) => (
               <View key={i} style={styles.ideaTagChip}>
-                <Text style={styles.ideaTagText}>#{t}</Text>
+                <Text style={styles.ideaTagText}>#{tg}</Text>
               </View>
             ))}
           </View>
@@ -346,20 +372,20 @@ export default function IdeaBankScreen() {
 
         {idea.notes ? (
           <View style={styles.ideaNotesBox}>
-            <Text style={styles.ideaNotesLabel}>📌 NOT</Text>
+            <Text style={styles.ideaNotesLabel}>{t('ideaPacks.notesLabelBox')}</Text>
             <Text style={styles.ideaNotesText}>{idea.notes}</Text>
           </View>
         ) : null}
 
         <View style={styles.ideaActions}>
           <Pressable style={({ pressed }) => [styles.ideaCopyBtn, pressed && { opacity: 0.6 }]} onPress={onCopy}>
-            <Text style={styles.ideaCopyBtnText}>📋 Kopyala</Text>
+            <Text style={styles.ideaCopyBtnText}>{t('ideaPacks.copyBtn')}</Text>
           </Pressable>
           <Pressable style={({ pressed }) => [styles.ideaEditBtn, pressed && { opacity: 0.6 }]} onPress={onEdit}>
-            <Text style={styles.ideaEditBtnText}>✏️ Düzenle</Text>
+            <Text style={styles.ideaEditBtnText}>{t('ideaPacks.editBtn')}</Text>
           </Pressable>
           <Pressable style={({ pressed }) => [styles.ideaDeleteBtn, pressed && { opacity: 0.6 }]} onPress={onDelete}>
-            <Text style={styles.ideaDeleteBtnText}>🗑️</Text>
+            <Text style={styles.ideaDeleteBtnText}>{t('ideaPacks.deleteBtn')}</Text>
           </Pressable>
         </View>
       </View>
@@ -368,34 +394,34 @@ export default function IdeaBankScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'Idea Bank', headerBackTitle: 'Geri' }} />
+      <Stack.Screen options={{ title: t('ideaPacks.heroBadge'), headerBackTitle: t('common.back') }} />
+
+      <PageHint hintId="ideaBank" title={t('pageHints.ideaBank.title')} description={t('pageHints.ideaBank.desc')} />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.heroCard}>
-          <Text style={styles.heroBadge}>💡 IDEA BANK / FİKİR HAVUZU</Text>
-          <Text style={styles.heroTitle}>Bir sonraki içerik burada</Text>
-          <Text style={styles.heroSub}>
-            Ham fikirleri topla, geliştir, hazır olunca içerik takvimine at.
-          </Text>
+          <Text style={styles.heroBadge}>{t('ideaPacks.heroBadge')}</Text>
+          <Text style={styles.heroTitle}>{t('ideaPacks.heroTitle')}</Text>
+          <Text style={styles.heroSub}>{t('ideaPacks.heroSub')}</Text>
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatValue}>{list.length}</Text>
-              <Text style={styles.heroStatLabel}>toplam</Text>
+              <Text style={styles.heroStatLabel}>{t('ideaPacks.statTotal')}</Text>
             </View>
             <View style={styles.heroStat}>
               <Text style={[styles.heroStatValue, { color: IDEA_STATUSES[2].color }]}>{counts.ready}</Text>
-              <Text style={styles.heroStatLabel}>hazır</Text>
+              <Text style={styles.heroStatLabel}>{t('ideaPacks.statReady')}</Text>
             </View>
             <View style={styles.heroStat}>
               <Text style={[styles.heroStatValue, { color: IDEA_STATUSES[1].color }]}>{counts.developing}</Text>
-              <Text style={styles.heroStatLabel}>geliştiriliyor</Text>
+              <Text style={styles.heroStatLabel}>{t('ideaPacks.statDeveloping')}</Text>
             </View>
             <View style={styles.heroStat}>
               <Text style={[styles.heroStatValue, { color: IDEA_STATUSES[0].color }]}>{counts.raw}</Text>
-              <Text style={styles.heroStatLabel}>ham</Text>
+              <Text style={styles.heroStatLabel}>{t('ideaPacks.statRaw')}</Text>
             </View>
           </View>
         </View>
@@ -405,11 +431,11 @@ export default function IdeaBankScreen() {
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Fikirlerde ara..."
+            placeholder={t('ideaPacks.searchPlaceholder')}
             placeholderTextColor="#64748B"
           />
           <Pressable style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.7 }]} onPress={openAdd}>
-            <Text style={styles.addBtnText}>+ Yeni</Text>
+            <Text style={styles.addBtnText}>{t('ideaPacks.addBtn')}</Text>
           </Pressable>
         </View>
 
@@ -418,7 +444,7 @@ export default function IdeaBankScreen() {
             style={[styles.filterChip, filterStatus === 'all' && styles.filterChipActive]}
             onPress={() => setFilterStatus('all')}
           >
-            <Text style={[styles.filterChipText, filterStatus === 'all' && styles.filterChipTextActive]}>Tümü ({list.length})</Text>
+            <Text style={[styles.filterChipText, filterStatus === 'all' && styles.filterChipTextActive]}>{t('ideaPacks.filterAll', { count: list.length })}</Text>
           </Pressable>
           {IDEA_STATUSES.map(s => (
             <Pressable
@@ -427,7 +453,7 @@ export default function IdeaBankScreen() {
               onPress={() => setFilterStatus(s.id)}
             >
               <Text style={[styles.filterChipText, filterStatus === s.id && styles.filterChipTextActive]}>
-                {s.emoji} {s.label} ({counts[s.id]})
+                {t('ideaPacks.filterStatus', { emoji: s.emoji, label: t(`ideaPacks.${STATUS_KEY[s.id]}`), count: counts[s.id] })}
               </Text>
             </Pressable>
           ))}
@@ -436,27 +462,27 @@ export default function IdeaBankScreen() {
         {showAdd && (
           <View style={styles.addCard}>
             <View style={styles.addHeader}>
-              <Text style={styles.addTitle}>{editingId ? '✏️ Fikri Düzenle' : '💡 Yeni Fikir'}</Text>
+              <Text style={styles.addTitle}>{editingId ? t('ideaPacks.editTitle') : t('ideaPacks.newTitle')}</Text>
               <Pressable onPress={() => { setShowAdd(false); resetForm(); }}>
                 <Text style={styles.addClose}>✕</Text>
               </Pressable>
             </View>
 
             <Pressable style={({ pressed }) => [styles.suggestBtn, pressed && { opacity: 0.7 }]} onPress={handleGenerateSuggestion}>
-              <Text style={styles.suggestBtnText}>🎲 Bana Öneri Üret</Text>
+              <Text style={styles.suggestBtnText}>{t('ideaPacks.suggestBtn')}</Text>
             </Pressable>
 
-            <Text style={styles.formLabel}>Başlık *</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelTitle')}</Text>
             <TextInput
               style={styles.formInput}
               value={title}
               onChangeText={setTitle}
-              placeholder="ör. Yaz öncesi 12 haftalık program"
+              placeholder={t('ideaPacks.titlePlaceholder')}
               placeholderTextColor="#64748B"
               maxLength={120}
             />
 
-            <Text style={styles.formLabel}>Açı</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelAngle')}</Text>
             <View style={styles.angleRow}>
               {IDEA_ANGLES.map(a => (
                 <Pressable
@@ -465,12 +491,12 @@ export default function IdeaBankScreen() {
                   onPress={() => setAngle(a.id)}
                 >
                   <Text style={styles.angleEmoji}>{a.emoji}</Text>
-                  <Text style={[styles.angleText, angle === a.id && styles.angleTextActive]}>{a.label}</Text>
+                  <Text style={[styles.angleText, angle === a.id && styles.angleTextActive]}>{getAngleLabel(a.id)}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Durum</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelStatus')}</Text>
             <View style={styles.statusRow}>
               {IDEA_STATUSES.map(s => (
                 <Pressable
@@ -478,28 +504,28 @@ export default function IdeaBankScreen() {
                   style={[styles.statusChip, status === s.id && { backgroundColor: s.color, borderColor: s.color }]}
                   onPress={() => setStatus(s.id)}
                 >
-                  <Text style={[styles.statusText, status === s.id && styles.statusTextActive]}>{s.emoji} {STATUS_LABEL[s.id]}</Text>
+                  <Text style={[styles.statusText, status === s.id && styles.statusTextActive]}>{s.emoji} {t(`ideaPacks.${STATUS_KEY[s.id]}`)}</Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Hook Önerisi</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelHook')}</Text>
             <TextInput
               style={[styles.formInput, { minHeight: 60 }]}
               value={hookIdea}
               onChangeText={setHookIdea}
-              placeholder="Açılış cümlesi / dikkat çekici giriş"
+              placeholder={t('ideaPacks.hookPlaceholder')}
               placeholderTextColor="#64748B"
               multiline
               maxLength={200}
             />
 
-            <Text style={styles.formLabel}>Açıklama</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelDesc')}</Text>
             <TextInput
               style={[styles.formInput, { minHeight: 80 }]}
               value={description}
               onChangeText={setDescription}
-              placeholder="Fikrin detayı, ana mesaj, hedef kitle..."
+              placeholder={t('ideaPacks.descPlaceholder')}
               placeholderTextColor="#64748B"
               multiline
               maxLength={400}
@@ -507,31 +533,31 @@ export default function IdeaBankScreen() {
 
             <View style={styles.formRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.formLabel}>Format</Text>
+                <Text style={styles.formLabel}>{t('ideaPacks.labelFormat')}</Text>
                 <TextInput
                   style={styles.formInput}
                   value={format}
                   onChangeText={setFormat}
-                  placeholder="ör. Reels"
+                  placeholder={t('ideaPacks.formatPlaceholder')}
                   placeholderTextColor="#64748B"
                   maxLength={24}
                 />
               </View>
               <View style={{ width: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.formLabel}>Etiketler (virgülle)</Text>
+                <Text style={styles.formLabel}>{t('ideaPacks.labelTags')}</Text>
                 <TextInput
                   style={styles.formInput}
                   value={tagsInput}
                   onChangeText={setTagsInput}
-                  placeholder="squat, motivasyon"
+                  placeholder={t('ideaPacks.tagsPlaceholder')}
                   placeholderTextColor="#64748B"
                   maxLength={120}
                 />
               </View>
             </View>
 
-            <Text style={styles.formLabel}>Tahmini Erişim</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelReach')}</Text>
             <View style={styles.reachRow}>
               {(Object.keys(IDEA_REACH) as Idea['estimatedReach'][]).map(r => (
                 <Pressable
@@ -540,13 +566,13 @@ export default function IdeaBankScreen() {
                   onPress={() => setReach(r)}
                 >
                   <Text style={[styles.reachText, reach === r && styles.reachTextActive]}>
-                    {IDEA_REACH[r].emoji} {IDEA_REACH[r].label}
+                    {IDEA_REACH[r].emoji} {getReachLabel(r)}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Öncelik (1-5)</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelPriority')}</Text>
             <View style={styles.priorityRow}>
               {([1, 2, 3, 4, 5] as const).map(p => (
                 <Pressable
@@ -560,12 +586,12 @@ export default function IdeaBankScreen() {
               ))}
             </View>
 
-            <Text style={styles.formLabel}>Notlar</Text>
+            <Text style={styles.formLabel}>{t('ideaPacks.labelNotes')}</Text>
             <TextInput
               style={[styles.formInput, { minHeight: 60 }]}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Ek notlar, referanslar..."
+              placeholder={t('ideaPacks.notesPlaceholder')}
               placeholderTextColor="#64748B"
               multiline
               maxLength={200}
@@ -579,7 +605,7 @@ export default function IdeaBankScreen() {
               {saving ? (
                 <ActivityIndicator color="#0F172A" />
               ) : (
-                <Text style={styles.saveBtnText}>{editingId ? '💾 Güncelle' : '💾 Kaydet'}</Text>
+                <Text style={styles.saveBtnText}>{editingId ? t('ideaPacks.updateBtn') : t('ideaPacks.saveBtn')}</Text>
               )}
             </Pressable>
           </View>
@@ -598,15 +624,15 @@ export default function IdeaBankScreen() {
               />
             ))}
             <Pressable style={({ pressed }) => [styles.clearAllBtn, pressed && { opacity: 0.6 }]} onPress={handleClearAll}>
-              <Text style={styles.clearAllBtnText}>🧹 Tüm Fikir Havuzunu Temizle</Text>
+              <Text style={styles.clearAllBtnText}>{t('ideaPacks.clearAllBtn')}</Text>
             </Pressable>
           </View>
         ) : (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyEmoji}>💭</Text>
-            <Text style={styles.emptyTitle}>Henüz fikir yok</Text>
+            <Text style={styles.emptyTitle}>{t('ideaPacks.emptyTitle')}</Text>
             <Text style={styles.emptySub}>
-              {searchQuery.trim() ? 'Aramanızla eşleşen fikir bulunamadı.' : 'Yukarıdan "+ Yeni" ile ilk fikrini ekle.'}
+              {searchQuery.trim() ? t('ideaPacks.emptySearchSub') : t('ideaPacks.emptySub')}
             </Text>
           </View>
         )}

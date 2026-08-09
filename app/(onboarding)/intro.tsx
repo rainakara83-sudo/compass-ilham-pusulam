@@ -28,51 +28,36 @@ type Slide = {
   icon: string;
   accent: string;
   accentSoft: string;
-  title: string;
-  body: string;
-  badge: string;
   previewNiches?: string[];
 };
 
 const SLIDES: Slide[] = [
   {
-    key: 'discover',
+    key: 'slide1',
     icon: '🧭',
     accent: lightColors.primary,
     accentSoft: lightColors.primarySoft,
-    title: 'Her hafta yeni ilham',
-    body: 'Nişini seç, sana özel 7 günlük içerik planı otomatik hazırlansın.',
-    badge: 'KEŞFET',
     previewNiches: ['fitness', 'food', 'tech', 'fashion'],
   },
   {
-    key: 'ai',
+    key: 'slide2',
     icon: '✨',
     accent: lightColors.accent,
     accentSoft: lightColors.accentSoft,
-    title: 'AI ile sınırsız fikir',
-    body: 'Stuck anında AI\'a sor — 30 farklı açıdan yeni içerik fikirleri üret.',
-    badge: 'AI DESTEKLİ',
     previewNiches: ['tech', 'gaming', 'beauty'],
   },
   {
-    key: 'plan',
+    key: 'slide3',
     icon: '📅',
     accent: lightColors.secondary,
     accentSoft: lightColors.secondarySoft,
-    title: 'Takvim & hatırlatıcı',
-    body: 'İçeriklerini takvime yerleştir, zamanlama önerilerini al, bildirimle hatırlat.',
-    badge: 'PLANLAMA',
     previewNiches: ['travel', 'food'],
   },
   {
-    key: 'grow',
+    key: 'slide4',
     icon: '🚀',
     accent: lightColors.success.solid,
     accentSoft: lightColors.success.bg,
-    title: 'Streak ile büyü',
-    body: 'Tutarlı üret, streak kazan, kalkanlarını biriktir. Performansını analiz et.',
-    badge: 'BÜYÜME',
     previewNiches: ['personal_dev', 'fitness'],
   },
 ];
@@ -113,7 +98,7 @@ export default function Intro() {
           <Text style={styles.brandText}>Compass</Text>
         </View>
         <Pressable onPress={skip} hitSlop={10} style={styles.skipBtn}>
-          <Text style={styles.skipText}>Atla</Text>
+          <Text style={styles.skipText}>{t('common.skip')}</Text>
         </Pressable>
       </View>
 
@@ -154,7 +139,7 @@ export default function Intro() {
           ]}
         >
           <Text style={styles.ctaText}>
-            {isLast ? t('common.continue') : 'Devam'}
+            {t('common.continue')}
           </Text>
           <Text style={styles.ctaArrow}>{isLast ? '🚀' : '›'}</Text>
         </Pressable>
@@ -164,6 +149,7 @@ export default function Intro() {
 }
 
 function SlideContent({ slide }: { slide: Slide }) {
+  const { t } = useTranslation();
   const scale = useRef(new Animated.Value(0.6)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const ringScale = useRef(new Animated.Value(0)).current;
@@ -239,7 +225,7 @@ function SlideContent({ slide }: { slide: Slide }) {
               >
                 <NicheImage nicheId={id} size={48} borderRadius={10} />
                 <Text style={styles.nichePreviewLabel} numberOfLines={1}>
-                  {id === 'personal_dev' ? 'Kişisel' : id.charAt(0).toUpperCase() + id.slice(1)}
+                  {t(`niches.${id}`, id)}
                 </Text>
               </View>
             );
@@ -249,10 +235,10 @@ function SlideContent({ slide }: { slide: Slide }) {
 
       <Animated.View style={[styles.textWrap, { opacity: fade }]}>
         <View style={[styles.badge, { backgroundColor: slide.accentSoft, borderColor: slide.accent }]}>
-          <Text style={[styles.badgeText, { color: slide.accent }]}>{slide.badge}</Text>
+          <Text style={[styles.badgeText, { color: slide.accent }]}>{t(`onboarding.${slide.key}Badge`)}</Text>
         </View>
-        <Text style={styles.title}>{slide.title}</Text>
-        <Text style={styles.body}>{slide.body}</Text>
+        <Text style={styles.title}>{t(`onboarding.${slide.key}Title`)}</Text>
+        <Text style={styles.body}>{t(`onboarding.${slide.key}Sub`)}</Text>
       </Animated.View>
     </View>
   );

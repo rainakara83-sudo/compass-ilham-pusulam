@@ -26,6 +26,7 @@ import {
   saveBrief,
   addCopyToHistory,
 } from '../services/storage';
+import { safeT } from '../i18n';
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
@@ -33,7 +34,7 @@ const formatDate = (ts: number): string => {
 };
 
 const budgetLabel = (b: Brief['budget']): string =>
-  b === 'low' ? 'Düşük bütçe' : b === 'high' ? 'Yüksek bütçe' : 'Orta bütçe';
+  safeT(b === 'low' ? 'brief.budgetLowFull' : b === 'high' ? 'brief.budgetHighFull' : 'brief.budgetMediumFull');
 
 const budgetEmoji = (b: Brief['budget']): string => (b === 'low' ? '🪙' : b === 'high' ? '💎' : '💼');
 
@@ -325,45 +326,44 @@ export default function BriefScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>📋 Content Brief Manager</Text>
+          <Text style={styles.heroTitle}>{safeT('brief.heroTitle')}</Text>
           <Text style={styles.heroSub}>
-            Tek bir içerik için kısa, uygulanabilir brief üret. Hook → akış → CTA → metrikler →
-            dağıtım planı tek yerde.
+            {safeT('brief.heroSub')}
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Yeni Brief</Text>
+          <Text style={styles.sectionTitle}>{safeT('brief.newBrief')}</Text>
 
-          <Text style={styles.label}>Proje / kampanya adı *</Text>
+          <Text style={styles.label}>{safeT('brief.projectLabel')}</Text>
           <TextInput
             style={styles.input}
             value={projectName}
             onChangeText={setProjectName}
-            placeholder="ör: Yaz kampanyası açılışı"
+            placeholder={safeT('brief.projectPlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
-          <Text style={styles.label}>Hook (ilk cümle / frame) *</Text>
+          <Text style={styles.label}>{safeT('brief.hookLabel')}</Text>
           <TextInput
             style={[styles.input, styles.inputMulti]}
             value={hook}
             onChangeText={setHook}
-            placeholder="ör: 'Çoğu içerik üreticisi ilk 3 saniyeyi boşa harcıyor.'"
+            placeholder={safeT('brief.hookPlaceholder')}
             placeholderTextColor="#94a3b8"
             multiline
           />
 
-          <Text style={styles.label}>Hedef kitle (opsiyonel)</Text>
+          <Text style={styles.label}>{safeT('brief.audienceLabel')}</Text>
           <TextInput
             style={styles.input}
             value={audience}
             onChangeText={setAudience}
-            placeholder="ör: 25-34 yaş, Türkiye, içerik üreticileri"
+            placeholder={safeT('brief.audiencePlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
-          <Text style={styles.label}>Hedef</Text>
+          <Text style={styles.label}>{safeT('brief.goalLabel')}</Text>
           <View style={styles.chipRow}>
             {BRIEF_GOAL_PRESETS_LIST.map(g => {
               const active = goal === g.id;
@@ -381,7 +381,7 @@ export default function BriefScreen() {
             })}
           </View>
 
-          <Text style={styles.label}>Platform</Text>
+          <Text style={styles.label}>{safeT('brief.platformLabel')}</Text>
           <View style={styles.chipRow}>
             {BRIEF_PLATFORMS.map(p => {
               const active = platform === p.id;
@@ -402,7 +402,7 @@ export default function BriefScreen() {
             })}
           </View>
 
-          <Text style={styles.label}>Format</Text>
+          <Text style={styles.label}>{safeT('brief.formatLabel')}</Text>
           <View style={styles.chipRow}>
             {BRIEF_FORMATS.map(f => {
               const active = format === f.id;
@@ -420,18 +420,18 @@ export default function BriefScreen() {
             })}
           </View>
 
-          <Text style={styles.label}>CTA (Call to action)</Text>
+          <Text style={styles.label}>{safeT('brief.ctaLabel')}</Text>
           <TextInput
             style={styles.input}
             value={cta}
             onChangeText={setCta}
-            placeholder="ör: Kaydet, sonra uygula!"
+            placeholder={safeT('brief.ctaPlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Bütçe</Text>
+              <Text style={styles.label}>{safeT('brief.budgetLabel')}</Text>
               <View style={styles.chipRow}>
                 {(['low', 'medium', 'high'] as Brief['budget'][]).map(b => {
                   const active = budget === b;
@@ -442,7 +442,7 @@ export default function BriefScreen() {
                       onPress={() => setBudget(b)}
                     >
                       <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {budgetEmoji(b)} {b === 'low' ? 'Düşük' : b === 'high' ? 'Yüksek' : 'Orta'}
+                        {budgetEmoji(b)} {safeT(b === 'low' ? 'brief.budgetLow' : b === 'high' ? 'brief.budgetHigh' : 'brief.budgetMedium')}
                       </Text>
                     </Pressable>
                   );
@@ -451,7 +451,7 @@ export default function BriefScreen() {
             </View>
             <View style={{ width: 12 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Deadline (gün)</Text>
+              <Text style={styles.label}>{safeT('brief.deadlineLabel')}</Text>
               <TextInput
                 style={styles.input}
                 value={deadlineDays}
@@ -463,26 +463,26 @@ export default function BriefScreen() {
             </View>
           </View>
 
-          <Text style={styles.label}>Ton notu (opsiyonel)</Text>
+          <Text style={styles.label}>{safeT('brief.toneLabel')}</Text>
           <TextInput
             style={styles.input}
             value={toneNotes}
             onChangeText={setToneNotes}
-            placeholder="ör: samimi, biraz ironi var"
+            placeholder={safeT('brief.tonePlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
-          <Text style={styles.label}>Görsel yön (opsiyonel)</Text>
+          <Text style={styles.label}>{safeT('brief.visualLabel')}</Text>
           <TextInput
             style={styles.input}
             value={visualDirection}
             onChangeText={setVisualDirection}
-            placeholder="ör: pastel arka plan, el yazısı font"
+            placeholder={safeT('brief.visualPlaceholder')}
             placeholderTextColor="#94a3b8"
           />
 
           <View style={[styles.tipBox, { borderLeftColor: platformInfo.color }]}>
-            <Text style={styles.tipTitle}>{platformInfo.emoji} {platformInfo.label} ipucu</Text>
+            <Text style={styles.tipTitle}>{safeT('brief.tipLabel', undefined, { emoji: platformInfo.emoji, name: platformInfo.label })}</Text>
             <Text style={styles.tipText}>{platformInfo.tip}</Text>
           </View>
 
@@ -494,17 +494,17 @@ export default function BriefScreen() {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.ctaText}>📋 Brief oluştur ve kaydet</Text>
+              <Text style={styles.ctaText}>{safeT('brief.generate')}</Text>
             )}
           </Pressable>
         </View>
 
         <View style={styles.section}>
           <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>Kayıtlı Briefler ({list.length})</Text>
+            <Text style={styles.sectionTitle}>{safeT('brief.savedList', undefined, { count: list.length })}</Text>
             {list.length > 0 ? (
               <Pressable onPress={handleClearAll} hitSlop={10}>
-                <Text style={styles.clearText}>Hepsini sil</Text>
+                <Text style={styles.clearText}>{safeT('brief.clearAll')}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -513,7 +513,7 @@ export default function BriefScreen() {
             <View style={styles.empty}>
               <Text style={styles.emptyEmoji}>🗂️</Text>
               <Text style={styles.emptyText}>
-                Henüz kayıtlı brief yok. Yukarıdan bir tane üret, buraya gelecek.
+                {safeT('brief.emptyText')}
               </Text>
             </View>
           ) : (

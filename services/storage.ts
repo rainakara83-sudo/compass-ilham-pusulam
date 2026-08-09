@@ -1,5 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NicheId, getNichePool } from './contentService';
+import i18n, {
+  DEMO_IDEA_ORDER,
+  SupportedLng,
+  fillDemoTemplate,
+  getDefaultIdeasByNiche,
+  getDefaultTagsForNiche,
+  getDemoIdeaTitle,
+  pickDemoDescTemplate,
+  pickDemoHookTemplate,
+  pickDemoTitleTemplate,
+} from '../i18n';
 
 const NICHE_KEY = '@content-coach/niche';
 const NICHES_KEY = '@content-coach/niches';
@@ -27,6 +38,7 @@ const STREAK_LAST_USED_SHIELD_KEY = '@content-coach/streak-last-used-shield';
 const COLLECTIONS_KEY = '@content-coach/collections';
 const DAILY_CARD_KEY = '@content-coach/daily-card';
 const DAILY_CARD_FLIPS_KEY = '@content-coach/daily-card-flips';
+const ONBOARDED_KEY = '@content-coach/onboarded';
 
 export type ScheduleEntry = {
   id: string;
@@ -254,8 +266,6 @@ const startOfWeekMonday = (d: Date): Date => {
 const weeklyStreakDateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const dayShortLabels = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-
 export const getWeeklyStreakData = async (
   weeksBack: number = 8
 ): Promise<WeeklyStreakData> => {
@@ -305,6 +315,7 @@ export const getWeeklyStreakData = async (
     let activeDays = 0;
     let plannedTotal = 0;
     let doneTotal = 0;
+    const dayShortLabels = getShortDayLabels();
     const days: WeeklyStreakDay[] = [];
     for (let d = 0; d < 7; d++) {
       const day = new Date(ws);
@@ -513,16 +524,28 @@ export const getWeeklyGoalStats = async (): Promise<{ achievedWeeks: number; tot
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'pro';
 export type ContentGoal = 'growth' | 'engagement' | 'monetize' | 'community';
 
+const NICHE_ALIASES: Record<string, NicheId> = {
+  lifestyle: 'fashion' as NicheId,
+  moda: 'fashion' as NicheId,
+};
+
+const migrateNiche = (id: string | null | undefined): NicheId | null => {
+  if (!id) return null;
+  return (NICHE_ALIASES[id] ?? (id as NicheId));
+};
+
 export const getStoredNiche = async (): Promise<NicheId | null> => {
   try {
     const list = await getStoredNiches();
     if (list.length > 0) {
       const active = await getActiveNiche();
-      if (active && list.includes(active)) return active;
-      return list[0];
+      const migratedActive = migrateNiche(active);
+      if (migratedActive && list.includes(migratedActive)) return migratedActive;
+      const firstMigrated = migrateNiche(list[0]);
+      return firstMigrated;
     }
     const legacy = await AsyncStorage.getItem(NICHE_KEY);
-    return legacy as NicheId | null;
+    return migrateNiche(legacy);
   } catch {
     return null;
   }
@@ -550,13 +573,17 @@ export const getStoredNiches = async (): Promise<NicheId[]> => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter((n): n is NicheId => typeof n === 'string');
+        const migrated = parsed
+          .map((n) => (typeof n === 'string' ? NICHE_ALIASES[n] ?? n : n))
+          .filter((n): n is NicheId => typeof n === 'string');
+        return migrated;
       }
     }
     const legacy = await AsyncStorage.getItem(NICHE_KEY);
-    if (legacy) {
-      await AsyncStorage.setItem(NICHES_KEY, JSON.stringify([legacy]));
-      return [legacy as NicheId];
+    const migratedLegacy = migrateNiche(legacy);
+    if (migratedLegacy) {
+      await AsyncStorage.setItem(NICHES_KEY, JSON.stringify([migratedLegacy]));
+      return [migratedLegacy];
     }
     return [];
   } catch {
@@ -598,7 +625,7 @@ export const removeStoredNiche = async (niche: NicheId): Promise<NicheId[]> => {
 export const getActiveNiche = async (): Promise<NicheId | null> => {
   try {
     const v = await AsyncStorage.getItem(ACTIVE_NICHE_KEY);
-    return v ? (v as NicheId) : null;
+    return migrateNiche(v);
   } catch {
     return null;
   }
@@ -1064,14 +1091,46 @@ export type IdeaStats = {
   topNicheLabel: string | null;
 };
 
-const DAY_LABELS_TR: Record<string, string> = {
-  monday: 'Pzt',
-  tuesday: 'Sal',
-  wednesday: 'Çar',
-  thursday: 'Per',
-  friday: 'Cum',
-  saturday: 'Cmt',
-  sunday: 'Paz',
+const DAY_INDEX_MAP: Record<string, number> = {
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+  sunday: 0,
+};
+
+const formatDayShort = (weekdayIndexMondayFirst: number): string => {
+  const lng = (i18n.language || 'en').split('-')[0];
+  const base = new Date(2024, 0, 1);
+  const diff = (weekdayIndexMondayFirst - ((base.getDay() + 6) % 7) + 7) % 7;
+  base.setDate(base.getDate() + diff);
+  try {
+    const fmt = new Intl.DateTimeFormat(lng, { weekday: 'short' }).format(base);
+    return fmt.charAt(0).toLocaleUpperCase(lng) + fmt.slice(1);
+  } catch {
+    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekdayIndexMondayFirst];
+  }
+};
+
+export const getShortDayLabels = (): string[] => {
+  return [0, 1, 2, 3, 4, 5, 6].map(formatDayShort);
+};
+
+const getDayLabelForCurrentLng = (day: string): string => {
+  const idx = DAY_INDEX_MAP[day];
+  if (idx === undefined) return day;
+  const lng = (i18n.language || 'en').split('-')[0];
+  const base = new Date(2024, 0, 1);
+  const diff = (idx - base.getDay() + 7) % 7;
+  base.setDate(base.getDate() + diff);
+  try {
+    const fmt = new Intl.DateTimeFormat(lng, { weekday: 'short' }).format(base);
+    return fmt.charAt(0).toLocaleUpperCase(lng) + fmt.slice(1);
+  } catch {
+    return day;
+  }
 };
 
 export const getIdeaStats = async (): Promise<IdeaStats> => {
@@ -1102,7 +1161,7 @@ export const getIdeaStats = async (): Promise<IdeaStats> => {
     topDay,
     topDayCount,
     mostFrequentIdea: topIdeaEntry ? { text: topIdeaEntry[0], count: topIdeaEntry[1] } : null,
-    mostFrequentDayLabel: topDay ? (DAY_LABELS_TR[topDay] ?? topDay) : null,
+    mostFrequentDayLabel: topDay ? getDayLabelForCurrentLng(topDay) : null,
     nicheBreakdown: nicheCounts,
     topNiche,
     topNicheCount,
@@ -1311,20 +1370,61 @@ export type CommentTemplate = {
   createdAt: number;
 };
 
-export const DEFAULT_COMMENT_TEMPLATES: CommentTemplate[] = [
-  { id: 'tpl-default-1', text: '🔥 Harika içerik! Ellerine sağlık 👏', category: 'fire', createdAt: 0 },
-  { id: 'tpl-default-2', text: '❤️ Tam bana göre, çok beğendim!', category: 'love', createdAt: 0 },
-  { id: 'tpl-default-3', text: '❓ Bunu nasıl yapıyorsun? Paylaşır mısın?', category: 'question', createdAt: 0 },
-  { id: 'tpl-default-4', text: '💡 Çok faydalı bir ipucu, kaydettim!', category: 'tip', createdAt: 0 },
-  { id: 'tpl-default-5', text: '📢 Takip eden herkese selamlar! 🚀', category: 'shoutout', createdAt: 0 },
-];
+export const DEFAULT_COMMENT_TEMPLATES_BY_LANG: Record<SupportedLng, CommentTemplate[]> = {
+  tr: [
+    { id: 'tpl-default-1', text: '🔥 Harika içerik! Ellerine sağlık 👏', category: 'fire', createdAt: 0 },
+    { id: 'tpl-default-2', text: '❤️ Tam bana göre, çok beğendim!', category: 'love', createdAt: 0 },
+    { id: 'tpl-default-3', text: '❓ Bunu nasıl yapıyorsun? Paylaşır mısın?', category: 'question', createdAt: 0 },
+    { id: 'tpl-default-4', text: '💡 Çok faydalı bir ipucu, kaydettim!', category: 'tip', createdAt: 0 },
+    { id: 'tpl-default-5', text: '📢 Takip eden herkese selamlar! 🚀', category: 'shoutout', createdAt: 0 },
+  ],
+  en: [
+    { id: 'tpl-default-1', text: '🔥 Great content! Love this 👏', category: 'fire', createdAt: 0 },
+    { id: 'tpl-default-2', text: '❤️ Just my style, really enjoyed it!', category: 'love', createdAt: 0 },
+    { id: 'tpl-default-3', text: '❓ How do you do this? Will you share?', category: 'question', createdAt: 0 },
+    { id: 'tpl-default-4', text: '💡 Super useful tip, saved this!', category: 'tip', createdAt: 0 },
+    { id: 'tpl-default-5', text: '📢 Shoutout to everyone following! 🚀', category: 'shoutout', createdAt: 0 },
+  ],
+  es: [
+    { id: 'tpl-default-1', text: '🔥 ¡Gran contenido! Gracias por compartir 👏', category: 'fire', createdAt: 0 },
+    { id: 'tpl-default-2', text: '❤️ ¡Justo para mí, me encantó!', category: 'love', createdAt: 0 },
+    { id: 'tpl-default-3', text: '❓ ¿Cómo lo haces? ¿Lo compartes?', category: 'question', createdAt: 0 },
+    { id: 'tpl-default-4', text: '💡 ¡Un consejo muy útil, lo guardé!', category: 'tip', createdAt: 0 },
+    { id: 'tpl-default-5', text: '📢 ¡Saludos a todos los seguidores! 🚀', category: 'shoutout', createdAt: 0 },
+  ],
+  de: [
+    { id: 'tpl-default-1', text: '🔥 Genialer Inhalt! Danke dafür 👏', category: 'fire', createdAt: 0 },
+    { id: 'tpl-default-2', text: '❤️ Genau mein Ding, hat mir sehr gefallen!', category: 'love', createdAt: 0 },
+    { id: 'tpl-default-3', text: '❓ Wie machst du das? Teilst du es?', category: 'question', createdAt: 0 },
+    { id: 'tpl-default-4', text: '💡 Sehr hilfreicher Tipp, gespeichert!', category: 'tip', createdAt: 0 },
+    { id: 'tpl-default-5', text: '📢 Hallo an alle Follower! 🚀', category: 'shoutout', createdAt: 0 },
+  ],
+  fr: [
+    { id: 'tpl-default-1', text: '🔥 Super contenu ! Bravo 👏', category: 'fire', createdAt: 0 },
+    { id: 'tpl-default-2', text: '❤️ Tout à fait mon style, j’ai adoré !', category: 'love', createdAt: 0 },
+    { id: 'tpl-default-3', text: '❓ Comment tu fais ? Tu partages ?', category: 'question', createdAt: 0 },
+    { id: 'tpl-default-4', text: '💡 Astuce super utile, j’ai enregistré !', category: 'tip', createdAt: 0 },
+    { id: 'tpl-default-5', text: '📢 Salut à tous les abonnés ! 🚀', category: 'shoutout', createdAt: 0 },
+  ],
+};
+
+export const getDefaultCommentTemplates = (): CommentTemplate[] => {
+  const cur = (i18n.language || 'en').split('-')[0];
+  if (cur === 'tr' || cur === 'en' || cur === 'es' || cur === 'de' || cur === 'fr') {
+    return DEFAULT_COMMENT_TEMPLATES_BY_LANG[cur];
+  }
+  return DEFAULT_COMMENT_TEMPLATES_BY_LANG.en;
+};
+
+// Backward compatibility — Turkish defaults (kept for legacy imports)
+export const DEFAULT_COMMENT_TEMPLATES: CommentTemplate[] = DEFAULT_COMMENT_TEMPLATES_BY_LANG.tr;
 
 export const getCommentTemplates = async (): Promise<CommentTemplate[]> => {
   try {
     const raw = await AsyncStorage.getItem(COMMENT_TPL_KEY);
-    if (!raw) return DEFAULT_COMMENT_TEMPLATES;
+    if (!raw) return getDefaultCommentTemplates();
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_COMMENT_TEMPLATES;
+    if (!Array.isArray(parsed)) return getDefaultCommentTemplates();
     const list = (parsed as CommentTemplate[]).filter(
       (t): t is CommentTemplate =>
         t &&
@@ -1334,9 +1434,9 @@ export const getCommentTemplates = async (): Promise<CommentTemplate[]> => {
         typeof t.category === 'string' &&
         typeof t.createdAt === 'number'
     );
-    return list.length > 0 ? list : DEFAULT_COMMENT_TEMPLATES;
+    return list.length > 0 ? list : getDefaultCommentTemplates();
   } catch {
-    return DEFAULT_COMMENT_TEMPLATES;
+    return getDefaultCommentTemplates();
   }
 };
 
@@ -1363,16 +1463,18 @@ export const removeCommentTemplate = async (id: string): Promise<CommentTemplate
   const list = await getCommentTemplates();
   const next = list.filter((t) => t.id !== id);
   if (next.length === 0) {
-    await AsyncStorage.setItem(COMMENT_TPL_KEY, JSON.stringify(DEFAULT_COMMENT_TEMPLATES));
-    return DEFAULT_COMMENT_TEMPLATES;
+    const defaults = getDefaultCommentTemplates();
+    await AsyncStorage.setItem(COMMENT_TPL_KEY, JSON.stringify(defaults));
+    return defaults;
   }
   await AsyncStorage.setItem(COMMENT_TPL_KEY, JSON.stringify(next));
   return next;
 };
 
 export const resetCommentTemplates = async (): Promise<CommentTemplate[]> => {
-  await AsyncStorage.setItem(COMMENT_TPL_KEY, JSON.stringify(DEFAULT_COMMENT_TEMPLATES));
-  return DEFAULT_COMMENT_TEMPLATES;
+  const defaults = getDefaultCommentTemplates();
+  await AsyncStorage.setItem(COMMENT_TPL_KEY, JSON.stringify(defaults));
+  return defaults;
 };
 
 export type IdeaTagsMap = Record<string, string[]>;
@@ -1573,6 +1675,73 @@ const DAILY_PROMPTS = [
   'Sana enerji veren bir anı bugün paylaş.',
   'Bir liste mi, bir soru mu, bir ipucu mu?',
 ];
+
+const DAILY_PROMPTS_EN = [
+  'How can you inspire your audience today?',
+  'Pick one real story worth sharing.',
+  'When was the last time you were fully present?',
+  "What's the one thing your followers need most?",
+  'Try adding a small risk to your next post.',
+  'Share a moment that gave you energy today.',
+  'A list, a question, or a quick tip?',
+];
+
+const DAILY_PROMPTS_ES = [
+  '¿Cómo puedes inspirar a tu audiencia hoy?',
+  'Elige una historia real que valga la pena compartir.',
+  '¿Cuándo fue la última vez que estuviste totalmente presente?',
+  '¿Qué es lo que más necesitan tus seguidores ahora?',
+  'Añade un pequeño riesgo a tu próximo post.',
+  'Comparte un momento que te haya dado energía.',
+  '¿Una lista, una pregunta o un consejo rápido?',
+];
+
+const DAILY_PROMPTS_DE = [
+  'Wie kannst du dein Publikum heute inspirieren?',
+  'Wähle eine echte Geschichte, die es wert ist, geteilt zu werden.',
+  'Wann warst du zuletzt ganz im Moment?',
+  'Was brauchen deine Follower am meisten?',
+  'Füge deinem nächsten Post ein kleines Risiko hinzu.',
+  'Teile einen Moment, der dir Energie gegeben hat.',
+  'Eine Liste, eine Frage oder ein kurzer Tipp?',
+];
+
+const DAILY_PROMPTS_FR = [
+  "Comment peux-tu inspirer ton audience aujourd'hui ?",
+  'Choisis une histoire réelle qui mérite d\u2019être partagée.',
+  'Quand as-tu été pleinement présent pour la dernière fois ?',
+  'De quoi tes abonnés ont-ils le plus besoin en ce moment ?',
+  'Ajoute un petit risque à ton prochain post.',
+  "Partage un moment qui t'a donné de l'énergie.",
+  'Une liste, une question ou un conseil rapide ?',
+];
+
+const DAILY_PROMPTS_BY_LANG: Record<string, string[]> = {
+  tr: DAILY_PROMPTS,
+  en: DAILY_PROMPTS_EN,
+  es: DAILY_PROMPTS_ES,
+  de: DAILY_PROMPTS_DE,
+  fr: DAILY_PROMPTS_FR,
+};
+
+const getCurrentLang = (): 'tr' | 'en' | 'es' | 'de' | 'fr' => {
+  const l = (i18n.language || 'en').split('-')[0];
+  if (l === 'tr' || l === 'en' || l === 'es' || l === 'de' || l === 'fr') return l;
+  return 'en';
+};
+
+const DAILY_FALLBACK_EN = 'Stay inspired with fresh content ideas ✨';
+const DAILY_FALLBACK_TR = 'Yeni fikirlerle ilham almaya devam et ✨';
+const DAILY_FALLBACK_ES = 'Mantente inspirado con ideas frescas ✨';
+const DAILY_FALLBACK_DE = 'Bleib inspiriert mit frischen Ideen ✨';
+const DAILY_FALLBACK_FR = 'Reste inspiré avec des idées fraîches ✨';
+const DAILY_FALLBACK_BY_LANG: Record<string, string> = {
+  tr: DAILY_FALLBACK_TR,
+  en: DAILY_FALLBACK_EN,
+  es: DAILY_FALLBACK_ES,
+  de: DAILY_FALLBACK_DE,
+  fr: DAILY_FALLBACK_FR,
+};
 
 const hashSeed = (s: string): number => {
   let h = 0;
@@ -2052,9 +2221,96 @@ export const removeHookFavorite = async (id: string): Promise<HookFavorite[]> =>
   return next;
 };
 
+export const clearAllHookFavorites = async (): Promise<HookFavorite[]> => {
+  await AsyncStorage.setItem(HOOK_FAVORITES_KEY, JSON.stringify([]));
+  return [];
+};
+
 export const isHookFavorited = async (text: string, style: HookStyle, format: HookFormat): Promise<boolean> => {
   const list = await getHookFavorites();
   return list.some((h) => h.text === text && h.style === style && h.format === format);
+};
+
+export type HookReach = 'low' | 'medium' | 'high' | 'viral';
+
+export type SavedHook = {
+  id: string;
+  text: string;
+  style: HookStyle;
+  format: HookFormat;
+  pattern: string;
+  templateId: string;
+  niche: NicheId | null;
+  reach: HookReach;
+  language: 'tr' | 'en' | 'es' | 'de' | 'fr';
+  createdAt: number;
+  favorited: boolean;
+};
+
+const HOOK_LIBRARY_KEY = '@content-coach/hook-library';
+
+export const getAllHooks = async (): Promise<SavedHook[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(HOOK_LIBRARY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as SavedHook[]).filter(
+      (h): h is SavedHook =>
+        h &&
+        typeof h === 'object' &&
+        typeof h.id === 'string' &&
+        typeof h.text === 'string' &&
+        typeof h.style === 'string' &&
+        typeof h.format === 'string' &&
+        typeof h.createdAt === 'number'
+    );
+  } catch {
+    return [];
+  }
+};
+
+export const saveSavedHook = async (hook: SavedHook): Promise<SavedHook[]> => {
+  const list = await getAllHooks();
+  const next = [hook, ...list].slice(0, 1000);
+  await AsyncStorage.setItem(HOOK_LIBRARY_KEY, JSON.stringify(next));
+  return next;
+};
+
+export const saveHooksBulk = async (hooks: SavedHook[]): Promise<SavedHook[]> => {
+  if (hooks.length === 0) return getAllHooks();
+  const list = await getAllHooks();
+  const next = [...hooks, ...list].slice(0, 1000);
+  await AsyncStorage.setItem(HOOK_LIBRARY_KEY, JSON.stringify(next));
+  return next;
+};
+
+export const toggleHookFavoriteById = async (id: string): Promise<SavedHook[]> => {
+  const list = await getAllHooks();
+  const next = list.map((h) => (h.id === id ? { ...h, favorited: !h.favorited } : h));
+  await AsyncStorage.setItem(HOOK_LIBRARY_KEY, JSON.stringify(next));
+  return next;
+};
+
+export const deleteSavedHook = async (id: string): Promise<SavedHook[]> => {
+  const list = await getAllHooks();
+  const next = list.filter((h) => h.id !== id);
+  await AsyncStorage.setItem(HOOK_LIBRARY_KEY, JSON.stringify(next));
+  return next;
+};
+
+export const clearAllSavedHooks = async (): Promise<SavedHook[]> => {
+  await AsyncStorage.setItem(HOOK_LIBRARY_KEY, JSON.stringify([]));
+  return [];
+};
+
+export const estimateHookReach = (hook: GeneratedHook): HookReach => {
+  const len = hook.text.length;
+  if (hook.style === 'bold' || hook.style === 'contrarian') return 'viral';
+  if (hook.style === 'stat' || hook.style === 'question') return 'high';
+  if (hook.style === 'story' && len > 40) return 'medium';
+  if (hook.style === 'list') return 'medium';
+  return 'low';
 };
 
 const NICHE_FILLERS: Record<string, string[]> = {
@@ -2133,26 +2389,37 @@ export const generateHooks = (
   return generated;
 };
 
-export const buildDailyCard = (niche: NicheId | null, date: string = todayKey()): DailyCardEntry => {
+export const buildDailyCard = (
+  niche: NicheId | null,
+  date: string = todayKey(),
+  lang: 'tr' | 'en' | 'es' | 'de' | 'fr' = getCurrentLang()
+): DailyCardEntry => {
+  const promptPool = DAILY_PROMPTS_BY_LANG[lang] || DAILY_PROMPTS_EN;
   if (niche) {
-    const pool = getNichePool(niche);
+    const pool = getNichePool(niche, lang);
     if (pool.length > 0) {
-      const idx = hashSeed(`${date}|${niche}`) % pool.length;
-      return { date, idea: pool[idx], niche };
+      const idx = hashSeed(`${date}|${niche}|${lang}`) % pool.length;
+      if (lang === 'tr') {
+        return { date, idea: pool[idx], niche };
+      }
+      const fallback = DAILY_FALLBACK_BY_LANG[lang] || DAILY_FALLBACK_EN;
+      return { date, idea: fallback, niche };
     }
   }
-  const idx = hashSeed(date) % DAILY_PROMPTS.length;
-  return { date, idea: DAILY_PROMPTS[idx], niche: null };
+  const idx = hashSeed(`${date}|${lang}`) % promptPool.length;
+  return { date, idea: promptPool[idx], niche: null };
 };
 
 export const getDailyCard = async (niche: NicheId | null): Promise<DailyCardEntry> => {
   const today = todayKey();
+  const lang = getCurrentLang();
   try {
     const raw = await AsyncStorage.getItem(DAILY_CARD_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       const cachedNiche: NicheId | null = typeof parsed.niche === 'string' ? (parsed.niche as NicheId) : null;
-      if (parsed && parsed.date === today && typeof parsed.idea === 'string' && cachedNiche === niche) {
+      const cachedLang: string = typeof parsed.lang === 'string' ? parsed.lang : 'tr';
+      if (parsed && parsed.date === today && typeof parsed.idea === 'string' && cachedNiche === niche && cachedLang === lang) {
         return {
           date: today,
           idea: parsed.idea,
@@ -2161,21 +2428,22 @@ export const getDailyCard = async (niche: NicheId | null): Promise<DailyCardEntr
       }
     }
   } catch {}
-  const card = buildDailyCard(niche, today);
-  await AsyncStorage.setItem(DAILY_CARD_KEY, JSON.stringify(card));
+  const card = buildDailyCard(niche, today, lang);
+  await AsyncStorage.setItem(DAILY_CARD_KEY, JSON.stringify({ ...card, lang }));
   return card;
 };
 
 export const rerollDailyCard = async (niche: NicheId | null): Promise<DailyCardEntry> => {
   const today = todayKey();
+  const lang = getCurrentLang();
   let next: DailyCardEntry;
   let attempts = 0;
   const current = await getDailyCard(niche);
   do {
-    next = buildDailyCard(niche, today);
+    next = buildDailyCard(niche, today, lang);
     attempts += 1;
   } while (next.idea === current.idea && attempts < 5);
-  await AsyncStorage.setItem(DAILY_CARD_KEY, JSON.stringify(next));
+  await AsyncStorage.setItem(DAILY_CARD_KEY, JSON.stringify({ ...next, lang }));
   return next;
 };
 
@@ -5922,7 +6190,7 @@ const pickRandom = <T,>(arr: T[], seed: number): T => {
   return item as T;
 };
 
-export const buildIdeaSuggestion = (niche: NicheId, seedBase = Date.now()): {
+export const buildIdeaSuggestion = (niche: NicheId, seedBase = Date.now(), lang?: string): {
   title: string;
   description: string;
   hookIdea: string;
@@ -5931,33 +6199,18 @@ export const buildIdeaSuggestion = (niche: NicheId, seedBase = Date.now()): {
   format: string;
   estimatedReach: Idea['estimatedReach'];
 } => {
-  const tagPool = IDEA_DEFAULT_TAGS[niche] ?? ['içerik', 'fikir', 'planlama', 'analiz', 'taktik', 'sosyal'];
+  const lngKey: SupportedLng = (lang as SupportedLng) ?? ((i18n.language || 'en').split('-')[0] as SupportedLng);
+  const tagPool = getDefaultTagsForNiche(niche, lngKey);
   const tags = Array.from(new Set([pickRandom(tagPool, seedBase), pickRandom(tagPool, seedBase + 1), pickRandom(tagPool, seedBase + 2)]));
 
-  const titleTemplates = [
-    `${tags[0]} hakkında bilmen gereken 5 şey`,
-    `Sektörde herkesin yanlış yaptığı ${tags[0]} hatası`,
-    `${tags[0]}: Sıfırdan zirveye yol haritası`,
-    `Bir haftada ${tags[0]} dönüşümü`,
-    `${tags[0]} üstadı olmak için 3 kitap/araç`,
-  ];
-  const title = pickRandom(titleTemplates, seedBase + 3);
+  const titleTpl = pickDemoTitleTemplate(seedBase + 3, lngKey);
+  const title = fillDemoTemplate(titleTpl, { tag: tags[0] });
 
-  const descTemplates = [
-    `Bu fikir ${tags.join(', ')} konularını birleştirip hedef kitleye derin değer katıyor. Düşündüğünden daha fazla etkileşim alabilir.`,
-    `Toplulukta ${tags[0]} hakkında sıkça soru alıyorsun. Bunu kapsayan bir içerik takipçi sadakatini artırır.`,
-    `Trend olan ${tags[0]} konusunu kendi açından ele al. Farklı bakış açısı öne çıkmana yardım eder.`,
-    `Pratik bir liste — ${tags.join(', ')}. Takipçiler kaydetmeyi sever çünkü uygulanabilir.`,
-  ];
-  const description = pickRandom(descTemplates, seedBase + 5);
+  const descTpl = pickDemoDescTemplate(seedBase + 5, lngKey);
+  const description = fillDemoTemplate(descTpl, { tag: tags[0], tags: tags.join(', ') });
 
-  const hookTemplates = [
-    `X ile Y arasındaki farkı hiç düşündün mü? İşte cevabı.`,
-    `${tags[0]} hakkında tek bir gerçeği bileceksin. Hazır mısın?`,
-    `Bu ${tags[0]} taktiği 1 saatte hayatını değiştirebilir.`,
-    `Son 30 günde ${tags[0]} konusunda en çok sorulan 3 soru.`,
-  ];
-  const hookIdea = pickRandom(hookTemplates, seedBase + 7);
+  const hookTpl = pickDemoHookTemplate(seedBase + 7, lngKey);
+  const hookIdea = fillDemoTemplate(hookTpl, { tag: tags[0] });
 
   const angle: IdeaAngle = pickRandom(['tutorial', 'story', 'listicle', 'opinion', 'myth', 'tip'], seedBase + 9) as IdeaAngle;
   const format = pickRandom(IDEA_DEFAULT_FORMATS, seedBase + 11);
@@ -6020,19 +6273,21 @@ export const clearIdeaBank = async (): Promise<void> => {
   await AsyncStorage.removeItem(IDEA_BANK_KEY);
 };
 
-export const seedIdeaBankDemo = async (niche: NicheId): Promise<Idea[]> => {
+export const seedIdeaBankDemo = async (niche: NicheId | null | undefined, lang?: string): Promise<Idea[]> => {
   const current = await getIdeaBank();
   if (current.length > 0) return current;
   const now = Date.now();
-  const demoTitles = [
-    'Yaz öncesi 12 haftalık program',
-    'Sosyal medyada vakit kaybettiren 5 alışkanlık',
-    'Evde ekipmansız full body',
-    'Yeni başlayanlar için 3 kitap',
-    '30 günde kahvaltı rutini',
-  ];
+  const suppLng = (lang ?? (i18n.language || 'en').split('-')[0]) as any;
+  const safeNiche: NicheId = (niche ?? 'food') as NicheId;
+  let demoTitles: string[] = getDefaultIdeasByNiche(safeNiche, suppLng);
+  if (demoTitles.length === 0) {
+    demoTitles = getNichePool(safeNiche, suppLng).slice(0, 5);
+  }
+  if (demoTitles.length === 0) {
+    demoTitles = DEMO_IDEA_ORDER.map((k) => getDemoIdeaTitle(k, suppLng));
+  }
   const demo: Idea[] = demoTitles.map((title, i) => {
-    const s = buildIdeaSuggestion(niche, now + i);
+    const s = buildIdeaSuggestion(safeNiche, now + i, lang);
     return {
       id: `idea-demo-${i}-${Math.random().toString(36).slice(2, 5)}`,
       title,
@@ -7120,13 +7375,15 @@ export const weekDays = (weekStart: number): { ts: number; label: string; short:
   const out: { ts: number; label: string; short: string; isToday: boolean }[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const shortLabels = getShortDayLabels();
+  const lng = (i18n.language || 'en').split('-')[0];
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
     out.push({
       ts: d.getTime(),
-      label: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'][i],
-      short: d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }),
+      label: shortLabels[i],
+      short: d.toLocaleDateString(lng, { day: '2-digit', month: '2-digit' }),
       isToday: d.getTime() === today.getTime(),
     });
   }
@@ -7467,7 +7724,7 @@ export type ThemeWeek = {
 
 const THEME_KEY = '@content-coach/weekly-themes';
 
-const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+export const getDayNames = (): string[] => getShortDayLabels();
 
 export const THEME_PILLARS: { id: string; label: string; emoji: string; color: string }[] = [
   { id: 'education', label: 'Eğitim', emoji: '🎓', color: '#0EA5E9' },
@@ -7593,8 +7850,6 @@ export const removeThemeWeek = async (id: string): Promise<ThemeWeek[]> => {
 export const clearThemeWeeks = async (): Promise<void> => {
   await AsyncStorage.removeItem(THEME_KEY);
 };
-
-export { DAY_NAMES };
 
 // ============================================================================
 // ROUND 70 — Bio Optimizer
@@ -9495,14 +9750,9 @@ export const BPT_AUDIENCES: Record<BPTAudience, { label: string; emoji: string }
   students: { label: 'Öğrenciler', emoji: '🎓' },
 };
 
-const DAY_LABELS: Record<BPTDay, string> = {
-  0: 'Paz',
-  1: 'Pzt',
-  2: 'Sal',
-  3: 'Çar',
-  4: 'Per',
-  5: 'Cum',
-  6: 'Cmt',
+const getBptDayLabel = (sundayIdx: BPTDay): string => {
+  const mondayIdx = sundayIdx === 0 ? 6 : sundayIdx - 1;
+  return formatDayShort(mondayIdx);
 };
 
 const BASE_HOUR_BIAS: Record<number, number> = {
@@ -9567,7 +9817,7 @@ export const buildBestPostTimes = (input: {
   slots.sort((a, b) => b.score - a.score);
   slots.forEach((s, idx) => {
     s.rank = idx + 1;
-    s.label = `${DAY_LABELS[s.day]} ${String(s.hour).padStart(2, '0')}:00`;
+    s.label = `${getBptDayLabel(s.day)} ${String(s.hour).padStart(2, '0')}:00`;
   });
 
   const top = slots.slice(0, 10);
@@ -11561,15 +11811,22 @@ export const CSO_SLOTS: { id: CSOSlot; label: string; emoji: string; reach: numb
   { id: 'late-night', label: 'Gece geç 23+', emoji: '🛌', reach: 500 },
 ];
 
-export const CSO_DAYS: { id: CSOEntry['day']; label: string; emoji: string; reachMult: number }[] = [
-  { id: 'mon', label: 'Pzt', emoji: '📅', reachMult: 1.0 },
-  { id: 'tue', label: 'Sal', emoji: '📅', reachMult: 1.05 },
-  { id: 'wed', label: 'Çar', emoji: '📅', reachMult: 1.1 },
-  { id: 'thu', label: 'Per', emoji: '📅', reachMult: 1.15 },
-  { id: 'fri', label: 'Cum', emoji: '📅', reachMult: 1.2 },
-  { id: 'sat', label: 'Cmt', emoji: '🎉', reachMult: 1.25 },
-  { id: 'sun', label: 'Paz', emoji: '🌞', reachMult: 0.9 },
+export const CSO_DAYS_META: { id: CSOEntry['day']; emoji: string; reachMult: number }[] = [
+  { id: 'mon', emoji: '📅', reachMult: 1.0 },
+  { id: 'tue', emoji: '📅', reachMult: 1.05 },
+  { id: 'wed', emoji: '📅', reachMult: 1.1 },
+  { id: 'thu', emoji: '📅', reachMult: 1.15 },
+  { id: 'fri', emoji: '📅', reachMult: 1.2 },
+  { id: 'sat', emoji: '🎉', reachMult: 1.25 },
+  { id: 'sun', emoji: '🌞', reachMult: 0.9 },
 ];
+
+export const getCSODays = (): { id: CSOEntry['day']; label: string; emoji: string; reachMult: number }[] => {
+  const labels = getShortDayLabels();
+  return CSO_DAYS_META.map((d, idx) => ({ ...d, label: labels[idx] }));
+};
+
+export const CSO_DAYS = getCSODays();
 
 const CSO_PLATFORM_MULT: Record<CSOPlatform, number> = {
   general: 1.0,
@@ -12817,3 +13074,71 @@ export const clearPSCs = async (): Promise<void> => {
   await AsyncStorage.removeItem(PSC_KEY);
 };
 
+
+export const isOnboarded = async (): Promise<boolean> => {
+  try {
+    const v = await AsyncStorage.getItem(ONBOARDED_KEY);
+    if (v === '1') return true;
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      if (window.localStorage.getItem('compass_onboarded') === '1') return true;
+    } catch {
+      // ignore
+    }
+  }
+  return false;
+};
+
+export const setOnboarded = async (): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(ONBOARDED_KEY, '1');
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('compass_onboarded', '1');
+    } catch {
+      // ignore
+    }
+  }
+};
+
+export const resetOnboarding = async (): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(ONBOARDED_KEY);
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.removeItem('compass_onboarded');
+    } catch {
+      // ignore
+    }
+  }
+};
+
+export const isLanguageSelected = async (): Promise<boolean> => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      if (window.localStorage.getItem('compass_language_selected') === '1') return true;
+    } catch {
+      // ignore
+    }
+  }
+  return false;
+};
+
+export const resetLanguageSelected = async (): Promise<void> => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.removeItem('compass_language_selected');
+    } catch {
+      // ignore
+    }
+  }
+};

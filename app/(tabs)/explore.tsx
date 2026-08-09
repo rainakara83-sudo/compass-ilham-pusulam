@@ -2,12 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Clipboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
 import { getStoredNiche, getFavorites, toggleFavorite, addCopyToHistory } from '../../services/storage';
 import { NicheId, getNichePool, pickRandomFromPool, searchNichePool } from '../../services/contentService';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
 
 export default function ExploreScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { isDark } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ q?: string | string[] }>();
   const deepQ = Array.isArray(params.q) ? params.q[0] : params.q;
@@ -30,9 +33,10 @@ export default function ExploreScreen() {
     const favs = await getFavorites();
     setFavorites(favs);
     if (n) {
-      setItems(query ? searchNichePool(n, query) : getNichePool(n));
+      const lng = (i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr';
+      setItems(query ? searchNichePool(n, query, lng) : getNichePool(n, lng));
     }
-  }, [query]);
+  }, [query, i18n.language]);
 
   useEffect(() => {
     load();
@@ -95,18 +99,19 @@ export default function ExploreScreen() {
 
   return (
     <View style={styles.container}>
+      <PageHint hintId="explore" title={t('pageHints.explore.title')} description={t('pageHints.explore.desc')} />
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={styles.title}>🔍 Keşfet</Text>
+          <Text style={styles.title}>🔍 {t('explore.title')}</Text>
           <PlanBadge size="sm" refreshKey={planRefresh} />
         </View>
         <Text style={styles.subtitle}>
-          {t(`niches.${niche}`, niche)} • {items.length} fikir
+          {t('explore.nicheCount', { niche: t(`niches.${niche}`, niche), count: items.length })}
         </Text>
         <View style={styles.searchRow}>
           <TextInput
             style={styles.search}
-            placeholder="Fikirlerde ara..."
+            placeholder={t('explore.searchPlaceholder')}
             value={query}
             onChangeText={setQuery}
             placeholderTextColor="#9CA3AF"
@@ -118,42 +123,42 @@ export default function ExploreScreen() {
           )}
         </View>
         <Pressable onPress={rollRandom} style={styles.randomBtn}>
-          <Text style={styles.randomBtnText}>🎲 Rastgele fikir getir</Text>
+          <Text style={styles.randomBtnText}>{t('explore.randomBtn')}</Text>
         </Pressable>
         {randomIdea && (
           <View style={styles.randomCard}>
-            <Text style={styles.randomLabel}>🎯 Rastgele fikrin</Text>
+            <Text style={styles.randomLabel}>{t('explore.randomLabel')}</Text>
             <Text style={styles.randomText}>{randomIdea}</Text>
             <View style={styles.randomActions}>
               <Pressable onPress={onCopyRandom} style={styles.randomAction}>
-                <Text style={styles.randomActionText}>{randomCopied ? '✓ Kopyalandı' : '⧉ Kopyala'}</Text>
+                <Text style={styles.randomActionText}>{randomCopied ? t('explore.randomCopied') : t('explore.randomCopy')}</Text>
               </Pressable>
               <Pressable onPress={() => onFav(randomIdea)} style={styles.randomAction}>
                 <Text style={styles.randomActionText}>
-                  {favorites.includes(randomIdea) ? '★ Favoride' : '☆ Favoriye ekle'}
+                  {favorites.includes(randomIdea) ? t('explore.randomFavRemove') : t('explore.randomFavAdd')}
                 </Text>
               </Pressable>
               <Pressable onPress={() => openDetail(randomIdea)} style={styles.randomAction}>
-                <Text style={styles.randomActionText}>↗ Detay</Text>
+                <Text style={styles.randomActionText}>{t('explore.randomDetail')}</Text>
               </Pressable>
             </View>
           </View>
         )}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
         {items.length === 0 && (
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>🔎 "{query}" için sonuç yok</Text>
+            <Text style={styles.emptyText}>{t('explore.emptyNoResult', { query })}</Text>
             <Pressable onPress={clearSearch} style={styles.emptyBtn}>
-              <Text style={styles.emptyBtnText}>Aramayı temizle</Text>
+              <Text style={styles.emptyBtnText}>{t('explore.emptyClearBtn')}</Text>
             </Pressable>
           </View>
         )}
 
         {showFavSection && (
           <>
-            <Text style={styles.section}>⭐ Favorilerin ({favoriteMatches.length})</Text>
+            <Text style={styles.section}>{t('explore.favSection', { count: favoriteMatches.length })}</Text>
             {favoriteMatches.map((idea, idx) => (
               <View key={`fav-${idx}`} style={[styles.card, styles.cardFav]}>
                 <Pressable onPress={() => openDetail(idea)}>
@@ -166,7 +171,7 @@ export default function ExploreScreen() {
                 </View>
               </View>
             ))}
-            <Text style={styles.section}>📚 Havuzdan diğerleri</Text>
+            <Text style={styles.section}>{t('explore.poolOther')}</Text>
           </>
         )}
 

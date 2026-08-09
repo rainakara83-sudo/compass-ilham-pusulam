@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '../../services/theme';
 import {
-  REMINDER_TEMPLATES,
   Reminder,
   addReminder,
+  buildReminderTemplates,
   deleteReminder,
   getScheduledNotifications,
   incrementReminderCompletion,
@@ -17,21 +18,14 @@ import {
   updateReminder,
 } from '../../services/notificationService';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
 
-const WEEKDAY_LABELS = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct'];
-
-const WEEKDAY_FULL: Record<number, string> = {
-  1: 'Pazartesi',
-  2: 'Salı',
-  3: 'Çarşamba',
-  4: 'Perşembe',
-  5: 'Cuma',
-  6: 'Cumartesi',
-  7: 'Pazar',
-};
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const WEEKDAY_FULL_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 export default function RemindersScreen() {
   const { t } = useTranslation();
+  const { isDark } = useTheme();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [hour, setHour] = useState(9);
   const [minute, setMinute] = useState(0);
@@ -48,7 +42,7 @@ export default function RemindersScreen() {
   const [weeklyDays, setWeeklyDays] = useState<number[]>([1]);
   const [weeklyHour, setWeeklyHour] = useState<number>(8);
   const [weeklyMinute, setWeeklyMinute] = useState<number>(0);
-  const [weeklyBody, setWeeklyBody] = useState<string>('Yeni haftanın fikirleri hazır. Uygulamayı aç ve göz at!');
+  const [weeklyBody, setWeeklyBody] = useState<string>('');
 
   const refresh = async () => {
     setReminders(await loadReminders());
@@ -62,6 +56,7 @@ export default function RemindersScreen() {
       const granted = await requestNotificationPermission();
       setPermission(granted);
       await refresh();
+      setWeeklyBody(t('reminders.weeklyDefaultMessage'));
     })();
     setPlanRefresh((x) => x + 1);
   }, []);
@@ -91,7 +86,7 @@ export default function RemindersScreen() {
   };
 
   const applyTemplate = (idx: number) => {
-    const tpl = REMINDER_TEMPLATES[idx];
+    const tpl = buildReminderTemplates()[idx];
     setHour(tpl.hour);
     setMinute(tpl.minute);
     setDays(tpl.weekdays);
@@ -110,7 +105,7 @@ export default function RemindersScreen() {
       }
     }
     if (!once && days.length === 0) {
-      Alert.alert('Lütfen en az bir gün seç veya "tek seferlik" modunu aç.');
+      Alert.alert(t('reminders.selectAtLeastOneDay'));
       return;
     }
 
@@ -135,10 +130,10 @@ export default function RemindersScreen() {
   };
 
   const onDelete = async (id: string) => {
-    Alert.alert('Hatırlatıcıyı sil', 'Bu hatırlatıcı kaldırılsın mı?', [
+    Alert.alert(t('reminders.deleteTitle'), t('reminders.deleteMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('reminders.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteReminder(id);
@@ -169,11 +164,11 @@ export default function RemindersScreen() {
     const ok = await sendTestNotification();
     if (!ok) {
       Alert.alert(
-        t('reminders.permissionDenied'),
-        'Tarayıcında bildirim iznini kontrol et. Web için: adres çubuğundaki kilit/ayar simgesinden izin ver.'
+        t('reminders.testAlertTitle'),
+        t('reminders.testAlertWebHint')
       );
     } else {
-      Alert.alert('🔔 Test bildirimi gönderildi', 'Birkaç saniye içinde görünecek!');
+      Alert.alert(t('reminders.testAlertTitle'), t('reminders.testAlertMsg'));
     }
   };
 
@@ -182,12 +177,12 @@ export default function RemindersScreen() {
       setShowWeeklyModal(true);
     } else {
       Alert.alert(
-        'Haftalık Hatırlatmayı Sil',
-        'Hatırlatmayı silmek istiyor musun?',
+        t('reminders.weeklyDisableTitle'),
+        t('reminders.weeklyDisableMsg'),
         [
-          { text: 'Vazgeç', style: 'cancel' },
+          { text: t('reminders.weeklyDisableCancel'), style: 'cancel' },
           {
-            text: 'Sil',
+            text: t('reminders.delete'),
             style: 'destructive',
             onPress: async () => {
               const ok = await setWeeklySummaryEnabled(false);
@@ -201,7 +196,7 @@ export default function RemindersScreen() {
 
   const saveWeekly = async () => {
     if (weeklyDays.length === 0) {
-      Alert.alert('Lütfen en az bir gün seç');
+      Alert.alert(t('reminders.weeklySelectDay'));
       return;
     }
     const ok = await setWeeklySummaryEnabled(true);
@@ -221,7 +216,8 @@ export default function RemindersScreen() {
 
   return (
     <>
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <PageHint hintId="reminders" title={t('pageHints.reminders.title')} description={t('pageHints.reminders.desc')} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Text style={styles.title}>{t('reminders.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
@@ -230,13 +226,13 @@ export default function RemindersScreen() {
       <View style={styles.statusCard}>
         <View style={[styles.statusDot, { backgroundColor: permission ? '#10B981' : '#DC2626' }]} />
         <Text style={styles.statusText}>
-          {permission ? 'Bildirim izni verilmiş' : 'Bildirim izni yok'}
+          {permission ? t('reminders.permissionGranted') : t('reminders.permissionNone')}
         </Text>
-        <Text style={styles.statusCount}>Aktif: {scheduledCount}</Text>
+        <Text style={styles.statusCount}>{t('reminders.activeCount', { count: scheduledCount })}</Text>
       </View>
 
       <Pressable onPress={onTest} style={styles.testBtn}>
-        <Text style={styles.testBtnText}>🔔 Test bildirimi gönder (2sn)</Text>
+        <Text style={styles.testBtnText}>{t('reminders.testBtn')}</Text>
       </Pressable>
 
       <Pressable
@@ -244,11 +240,9 @@ export default function RemindersScreen() {
         style={[styles.weeklyRow, weeklySummary && styles.weeklyRowActive]}
       >
         <View style={{ flex: 1 }}>
-          <Text style={styles.weeklyTitle}>📅 Haftalık özet bildirimi</Text>
+          <Text style={styles.weeklyTitle}>{t('reminders.weeklyTitle')}</Text>
           <Text style={styles.weeklySub}>
-            {weeklySummary
-              ? 'Her Pazartesi 08:00\'de yeni haftanın fikirleri için hatırlatma (açık)'
-              : 'Detayları görmek için tıkla'}
+            {weeklySummary ? t('reminders.weeklySubActive') : t('reminders.weeklySubInactive')}
           </Text>
         </View>
         <Switch
@@ -259,10 +253,10 @@ export default function RemindersScreen() {
         />
       </Pressable>
 
-      <Text style={styles.sectionTitle}>⚡ Hızlı şablonlar</Text>
+      <Text style={styles.sectionTitle}>⚡ {t('reminders.title')}</Text>
       <View style={styles.templateGrid}>
-        {REMINDER_TEMPLATES.map((tpl, idx) => (
-          <Pressable key={tpl.label} onPress={() => applyTemplate(idx)} style={styles.templateChip}>
+        {buildReminderTemplates().map((tpl, idx) => (
+          <Pressable key={`${tpl.label}-${idx}`} onPress={() => applyTemplate(idx)} style={styles.templateChip}>
             <Text style={styles.templateIcon}>{tpl.icon}</Text>
             <Text style={styles.templateLabel}>{tpl.label}</Text>
             <Text style={styles.templateTime}>{String(tpl.hour).padStart(2, '0')}:{String(tpl.minute).padStart(2, '0')}</Text>
@@ -272,23 +266,23 @@ export default function RemindersScreen() {
 
       <View style={styles.card}>
         <Text style={styles.label}>
-          {editingId ? 'Hatırlatıcıyı Düzenle' : t('reminders.addReminder')}
+          {editingId ? t('reminders.editReminder') : t('reminders.addReminder')}
         </Text>
 
-        <Text style={styles.subLabel}>Başlık (opsiyonel)</Text>
+        <Text style={styles.subLabel}>{t('reminders.titleOptional')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="İçerik zamanı!"
+          placeholder={t('reminders.titlePlaceholder')}
           placeholderTextColor="#9CA3AF"
           value={title}
           onChangeText={setTitle}
           maxLength={50}
         />
 
-        <Text style={styles.subLabel}>Mesaj (opsiyonel)</Text>
+        <Text style={styles.subLabel}>{t('reminders.bodyOptional')}</Text>
         <TextInput
           style={styles.input}
-          placeholder="Bugün paylaşımını planlamayı unutma"
+          placeholder={t('reminders.bodyPlaceholder')}
           placeholderTextColor="#9CA3AF"
           value={body}
           onChangeText={setBody}
@@ -300,13 +294,13 @@ export default function RemindersScreen() {
             onPress={() => setOnce(false)}
             style={[styles.typeChip, !once && styles.typeChipOn]}
           >
-            <Text style={[styles.typeText, !once && styles.typeTextOn]}>🔁 Tekrarlayan</Text>
+            <Text style={[styles.typeText, !once && styles.typeTextOn]}>{t('reminders.typeRecurring')}</Text>
           </Pressable>
           <Pressable
             onPress={() => setOnce(true)}
             style={[styles.typeChip, once && styles.typeChipOn]}
           >
-            <Text style={[styles.typeText, once && styles.typeTextOn]}>1️⃣ Tek seferlik</Text>
+            <Text style={[styles.typeText, once && styles.typeTextOn]}>{t('reminders.typeOnce')}</Text>
           </Pressable>
         </View>
 
@@ -337,7 +331,7 @@ export default function RemindersScreen() {
           <>
             <Text style={styles.subLabel}>{t('reminders.days')}</Text>
             <View style={styles.daysRow}>
-              {WEEKDAY_LABELS.map((label, idx) => {
+              {WEEKDAY_KEYS.map((key, idx) => {
                 const wd = idx === 0 ? 1 : idx === 6 ? 7 : idx + 1;
                 const active = days.includes(wd);
                 return (
@@ -346,7 +340,7 @@ export default function RemindersScreen() {
                     onPress={() => toggleDay(wd)}
                     style={[styles.dayChip, active && styles.dayChipActive]}
                   >
-                    <Text style={[styles.dayText, active && styles.dayTextActive]}>{label}</Text>
+                    <Text style={[styles.dayText, active && styles.dayTextActive]}>{t(`weekdays.${key}`)}</Text>
                   </Pressable>
                 );
               })}
@@ -355,32 +349,33 @@ export default function RemindersScreen() {
         )}
         {once && (
           <Text style={styles.onceHint}>
-            ⏰ Bu hatırlatıcı bugün {String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')} saatinde bir kez çalar.
-            Geçtiyse yarına ertelenir.
+            {t('reminders.onceHint', {
+              time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+            })}
           </Text>
         )}
 
         <View style={styles.buttonRow}>
           {editingId && (
             <Pressable style={[styles.addBtn, styles.cancelBtn]} onPress={cancelEdit}>
-              <Text style={styles.cancelBtnText}>İptal</Text>
+              <Text style={styles.cancelBtnText}>{t('reminders.cancel')}</Text>
             </Pressable>
           )}
           <Pressable style={styles.addBtn} onPress={onSave}>
-            <Text style={styles.addBtnText}>{editingId ? 'Güncelle' : t('reminders.addReminder')}</Text>
+            <Text style={styles.addBtnText}>{editingId ? t('reminders.update') : t('reminders.addReminder')}</Text>
           </Pressable>
         </View>
       </View>
 
-      <Text style={styles.subTitle}>Kayıtlı hatırlatmalar ({reminders.length})</Text>
+      <Text style={styles.subTitle}>{t('reminders.savedTitle', { count: reminders.length })}</Text>
       {reminders.length === 0 && <Text style={styles.empty}>{t('reminders.noReminders')}</Text>}
       {reminders.map((r) => {
         const isEnabled = r.enabled !== false;
         const daysLabel = r.once
-          ? 'Tek seferlik'
+          ? t('reminders.dayOnce')
           : r.weekdays.length === 7
-          ? 'Her gün'
-          : r.weekdays.map((d) => WEEKDAY_FULL[d]?.slice(0, 3) ?? '').join(', ');
+          ? t('reminders.dayEveryday')
+          : r.weekdays.map((d) => t(`weekdays.${WEEKDAY_FULL_KEYS[d - 1]}`)).join(', ');
         return (
           <View key={r.id} style={[styles.item, editingId === r.id && styles.itemActive, !isEnabled && styles.itemDisabled]}>
             <Pressable onPress={() => startEdit(r)} style={{ flex: 1 }}>
@@ -391,7 +386,7 @@ export default function RemindersScreen() {
               </Text>
               <Text style={styles.itemDays}>{daysLabel}</Text>
               {(r.completedCount ?? 0) > 0 && (
-                <Text style={styles.itemCount}>✓ {r.completedCount} kez tamamlandı</Text>
+                <Text style={styles.itemCount}>{t('reminders.completionCount', { count: r.completedCount })}</Text>
               )}
             </Pressable>
             <View style={styles.itemActions}>
@@ -417,12 +412,12 @@ export default function RemindersScreen() {
       <Pressable style={styles.modalBackdrop} onPress={() => setShowWeeklyModal(false)}>
         <Pressable style={styles.modalSheet} onPress={() => {}}>
           <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>📅 Haftalık Hatırlatma Ayarla</Text>
-          <Text style={styles.modalHint}>Hangi gün ve saatte hatırlatma almak istiyorsun?</Text>
+          <Text style={styles.modalTitle}>{t('reminders.weeklyModalTitle')}</Text>
+          <Text style={styles.modalHint}>{t('reminders.weeklyModalHint')}</Text>
 
-          <Text style={styles.subLabel}>Günler (birden fazla seçebilirsin)</Text>
+          <Text style={styles.subLabel}>{t('reminders.weeklyDaysLabel')}</Text>
           <View style={styles.weekDaysRow}>
-            {WEEKDAY_LABELS.map((label, i) => {
+            {WEEKDAY_KEYS.map((key, i) => {
               const day = i + 1;
               const active = weeklyDays.includes(day);
               return (
@@ -431,13 +426,13 @@ export default function RemindersScreen() {
                   onPress={() => toggleWeeklyDay(day)}
                   style={[styles.weekDayChip, active && styles.weekDayChipActive]}
                 >
-                  <Text style={[styles.weekDayText, active && styles.weekDayTextActive]}>{label}</Text>
+                  <Text style={[styles.weekDayText, active && styles.weekDayTextActive]}>{t(`weekdays.${key}`)}</Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={styles.subLabel}>Saat</Text>
+          <Text style={styles.subLabel}>{t('reminders.time')}</Text>
           <View style={styles.timeRow}>
             <View style={styles.timeBtn}>
               <Pressable onPress={() => setWeeklyHour((h) => (h + 1) % 24)} hitSlop={8}>
@@ -460,22 +455,22 @@ export default function RemindersScreen() {
             </View>
           </View>
 
-          <Text style={styles.subLabel}>Mesaj</Text>
+          <Text style={styles.subLabel}>{t('reminders.weeklyMessageLabel')}</Text>
           <TextInput
             style={styles.input}
             value={weeklyBody}
             onChangeText={setWeeklyBody}
-            placeholder="Hatırlatma mesajı"
+            placeholder={t('reminders.weeklyBodyPlaceholder')}
             placeholderTextColor="#9CA3AF"
             maxLength={100}
           />
 
           <View style={styles.modalBtnRow}>
             <Pressable style={[styles.addBtn, styles.cancelBtn]} onPress={() => setShowWeeklyModal(false)}>
-              <Text style={styles.cancelBtnText}>İptal</Text>
+              <Text style={styles.cancelBtnText}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable style={styles.addBtn} onPress={saveWeekly}>
-              <Text style={styles.addBtnText}>Kaydet</Text>
+              <Text style={styles.addBtnText}>{t('common.save')}</Text>
             </Pressable>
           </View>
         </Pressable>

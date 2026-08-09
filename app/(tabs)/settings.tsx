@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { setAppLanguage, SUPPORTED_LANGUAGES, SupportedLng } from '../../i18n';
+import { resetLanguageSelected } from '../../services/storage';
 import {
   ContentGoal,
   ExperienceLevel,
@@ -32,6 +33,7 @@ import nichesData from '../../data/niches.json';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NicheImage } from '../../components/NicheImage';
 import PlanBadge from '../../components/PlanBadge';
+import PageHint from '../../components/PageHint';
 import { ThemeMode, useTheme } from '../../services/theme';
 import {
   isDailyIdeaEnabled,
@@ -40,17 +42,23 @@ import {
 
 const APP_VERSION = (Constants.expoConfig?.version as string) ?? '1.0.0';
 
-const LEVEL_LABEL: Record<ExperienceLevel, string> = {
-  beginner: '🌱 Yeni başlıyorum',
-  intermediate: '🚀 Büyüyorum',
-  pro: '👑 Profesyonelim',
+const LEVEL_LABEL_KEY: Record<ExperienceLevel, string> = {
+  beginner: 'settings.levelBeginner',
+  intermediate: 'settings.levelIntermediate',
+  pro: 'settings.levelPro',
 };
 
-const GOAL_LABEL: Record<ContentGoal, string> = {
-  growth: '📈 Büyümek',
-  engagement: '💬 Etkileşim',
-  monetize: '💰 Gelir',
-  community: '🤝 Topluluk',
+const GOAL_LABEL_KEY: Record<ContentGoal, string> = {
+  growth: 'settings.goalGrowth',
+  engagement: 'settings.goalEngagement',
+  monetize: 'settings.goalMonetize',
+  community: 'settings.goalCommunity',
+};
+
+const PLAN_LABEL_KEY: Record<UserPlan, string> = {
+  free: 'pricing.free',
+  pro_monthly: 'pricing.proMonthly',
+  pro_yearly: 'pricing.proYearly',
 };
 
 type Niche = { id: string; icon: string; color: string; description?: string };
@@ -87,10 +95,40 @@ export default function SettingsScreen() {
     await setAppLanguage(lng);
   };
 
+  const onResetLanguage = () => {
+    Alert.alert(
+      t('langReset.title'),
+      t('langReset.msg'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('langReset.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            await resetLanguageSelected();
+            try {
+              await AsyncStorage.removeItem('@content-coach/language');
+            } catch {}
+            if (typeof window !== 'undefined' && window.localStorage) {
+              try {
+                window.localStorage.removeItem('compass_language_selected');
+              } catch {}
+            }
+            Alert.alert(
+              t('langReset.doneTitle'),
+              t('langReset.doneMsg'),
+              [{ text: t('common.ok'), onPress: () => router.replace('/') }]
+            );
+          },
+        },
+      ]
+    );
+  };
+
   const openLanguagePicker = () => {
     Alert.alert(
-      'Uygulama dilini seç',
-      'Tüm desteklenen diller',
+      t('settings.languagePickerTitle'),
+      t('settings.languagePickerMsg'),
       [
         ...SUPPORTED_LANGUAGES.map((lng) => ({
           text: `${lng.flag} ${lng.label}`,
@@ -105,12 +143,12 @@ export default function SettingsScreen() {
 
   const addEmail = () => {
     Alert.prompt(
-      'Haftalık özet e-postası',
-      'Haftanın fikirlerini ve streak durumunu gönderelim.\n(Bu özellik yakında aktif olacak)',
+      t('settings.emailPromptTitle'),
+      t('settings.emailPromptMsg'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Kaydet',
+          text: t('common.save'),
           onPress: async (val?: string) => {
             const trimmed = (val ?? '').trim();
             if (!trimmed.includes('@')) return;
@@ -127,11 +165,11 @@ export default function SettingsScreen() {
   const changeExperience = () => {
     const options: ExperienceLevel[] = ['beginner', 'intermediate', 'pro'];
     Alert.alert(
-      'Deneyim seviyesi',
-      'Mevcut deneyimini seç',
+      t('settings.experiencePickerTitle'),
+      t('settings.experiencePickerMsg'),
       [
         ...options.map((l) => ({
-          text: LEVEL_LABEL[l],
+          text: t(LEVEL_LABEL_KEY[l]),
           onPress: async () => {
             await setExperience(l);
             setExperienceState(l);
@@ -145,11 +183,11 @@ export default function SettingsScreen() {
   const changeGoal = () => {
     const options: ContentGoal[] = ['growth', 'engagement', 'monetize', 'community'];
     Alert.alert(
-      'Hedefin',
-      'İçerik üretimindeki asıl hedefin',
+      t('settings.goalPickerTitle'),
+      t('settings.goalPickerMsg'),
       [
         ...options.map((g) => ({
-          text: GOAL_LABEL[g],
+          text: t(GOAL_LABEL_KEY[g]),
           onPress: async () => {
             await setGoal(g);
             setGoalState(g);
@@ -175,66 +213,66 @@ const pickNiche = async (id: string) => {
   };
 
   const resetFavorites = () => {
-    Alert.alert('Favorileri sil', 'Tüm favori fikirlerin silinir.', [
+    Alert.alert(t('settings.deleteFavTitle'), t('settings.deleteFavMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('settings.delete'),
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.removeItem('@content-coach/favorites');
-          Alert.alert('Favoriler silindi.');
+          Alert.alert(t('settings.favDeletedTitle'));
         },
       },
     ]);
   };
 
   const resetHistory = () => {
-    Alert.alert('Geçmişi sil', 'Haftalık üretilen tüm fikir geçmişi silinir.', [
+    Alert.alert(t('settings.deleteHistoryTitle'), t('settings.deleteHistoryMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('settings.delete'),
         style: 'destructive',
         onPress: async () => {
           await clearHistory();
-          Alert.alert('Geçmiş silindi.');
+          Alert.alert(t('settings.historyDeletedTitle'));
         },
       },
     ]);
   };
 
   const resetStreak = () => {
-    Alert.alert('Streak sıfırla', 'Üst üste gün serini sıfırlar.', [
+    Alert.alert(t('settings.deleteStreakTitle'), t('settings.deleteStreakMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sıfırla',
+        text: t('settings.delete'),
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.removeItem('@content-coach/streak');
           await AsyncStorage.removeItem('@content-coach/streak-last');
-          Alert.alert('Streak sıfırlandı.');
+          Alert.alert(t('settings.streakResetTitle'));
         },
       },
     ]);
   };
 
   const resetCopies = () => {
-    Alert.alert('Kopyalama geçmişini sil', 'Son kopyaladığın 20 fikir silinir.', [
+    Alert.alert(t('settings.deleteCopiesTitle'), t('settings.deleteCopiesMsg'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('settings.delete'),
         style: 'destructive',
         onPress: async () => {
           await clearCopyHistory();
-          Alert.alert('Kopyalama geçmişi silindi.');
+          Alert.alert(t('settings.copiesDeletedTitle'));
         },
       },
     ]);
   };
 
   const sendFeedback = async () => {
-    const subject = encodeURIComponent('Compass (İlham Pusulam) — Geri bildirim');
+    const subject = encodeURIComponent(t('settings.feedbackSubject'));
     const body = encodeURIComponent(
-      `Merhaba Compass ekibi,\n\nUygulama hakkındaki düşüncelerim:\n\n—\nUygulama dili: ${i18n.language}\nSürüm: v${APP_VERSION}\nNiş: ${niche ?? '-'}\n`
+      t('settings.feedbackBody', { lang: i18n.language, version: APP_VERSION, niche: niche ?? '-' })
     );
     const url = `mailto:feedback@contentcoach.app?subject=${subject}&body=${body}`;
     try {
@@ -248,15 +286,15 @@ const pickNiche = async (id: string) => {
         return;
       }
       Alert.alert(
-        'E-posta açılamadı',
-        'Cihazında e-posta uygulaması bulunamadı. Geri bildirim için bize feedback@contentcoach.app adresinden ulaşabilirsin.'
+        t('settings.emailOpenError'),
+        t('settings.emailOpenErrorMsg')
       );
     } catch (e) {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.location.href = url;
         return;
       }
-      Alert.alert('Bağlantı hatası', String(e));
+      Alert.alert(t('settings.linkError'), String(e));
     }
   };
 
@@ -276,16 +314,15 @@ const pickNiche = async (id: string) => {
         window?.open?.(appStoreUrl, '_blank');
       }
     } catch (e) {
-      Alert.alert('Yönlendirilemedi', 'Mağaza sayfası açılamadı. Lütfen daha sonra tekrar dene.');
+      Alert.alert(t('settings.rateErrorTitle'), t('settings.rateErrorMsg'));
     }
   };
 
   const shareApp = async () => {
     try {
       await Share.share({
-        message:
-          'Compass — İlham Pusulam ile her hafta yeni içerik fikirleri al! Nişini seç, AI ya da hazır havuzdan fikir üret, hatırlatıcılarla üretimini takip et. https://contentcoach.app',
-        title: 'Compass — İlham Pusulam',
+        message: t('home.shareAppMsg'),
+        title: t('home.shareTitle'),
       });
     } catch (e) {
       console.warn('share app error', e);
@@ -294,12 +331,12 @@ const pickNiche = async (id: string) => {
 
   const resetAll = () => {
     Alert.alert(
-      'Tüm verileri sıfırla',
-      'Niş, dil, favoriler ve hatırlatıcılar silinir. Emin misin?',
+      t('settings.resetAllTitle'),
+      t('settings.resetAllMsg'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Sıfırla',
+          text: t('settings.resetAllConfirm'),
           style: 'destructive',
           onPress: async () => {
             await AsyncStorage.clear();
@@ -313,33 +350,32 @@ const pickNiche = async (id: string) => {
   const onExportBackup = async () => {
     try {
       const bundle = await exportAllData();
-      const summary = [
-        `Compass — İlham Pusulam Yedek`,
-        `Tarih: ${new Date(bundle.exportedAt).toLocaleString('tr-TR')}`,
-        `Niş: ${bundle.niche ?? '-'}`,
-        `Favoriler: ${bundle.favorites.length}`,
-        `Geçmiş haftalar: ${bundle.history.length}`,
-        `Üretilenler: ${bundle.done.length}`,
-        `Streak: ${bundle.streak.count} gün`,
-      ].join('\n');
+      const summary = t('settings.backupSummaryTpl', {
+        date: new Date(bundle.exportedAt).toLocaleString(i18n.language),
+        niche: bundle.niche ?? '-',
+        favs: bundle.favorites.length,
+        hist: bundle.history.length,
+        done: bundle.done.length,
+        streak: bundle.streak.count,
+      });
       const payload = JSON.stringify({ summary, data: bundle }, null, 2);
       await Share.share({
-        title: 'Compass — İlham Pusulam Yedek',
+        title: t('settings.backupTitle'),
         message: payload,
       });
     } catch (e) {
-      Alert.alert('Yedek oluşturulamadı', String(e));
+      Alert.alert(t('settings.backupErrorTitle'), String(e));
     }
   };
 
   const onImportBackup = () => {
     Alert.prompt(
-      'Geri yükle',
-      'Daha önce dışa aktardığın JSON yedeği buraya yapıştır.',
+      t('settings.importTitle'),
+      t('settings.importMsg'),
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Geri yükle',
+          text: t('settings.importBtn'),
           onPress: async (val?: string) => {
             const raw = (val ?? '').trim();
             if (!raw) return;
@@ -349,19 +385,19 @@ const pickNiche = async (id: string) => {
               const candidate = parsed && typeof parsed === 'object' && 'data' in parsed ? parsed.data : parsed;
               bundle = candidate as BackupBundle;
             } catch {
-              Alert.alert('Geçersiz JSON', 'Yedek çözümlenemedi. İçeriği kontrol et.');
+              Alert.alert(t('settings.importInvalidTitle'), t('settings.importInvalidMsg'));
               return;
             }
             const result = await importAllData(bundle);
             if (result.ok) {
-              Alert.alert('Geri yüklendi', 'Veriler başarıyla geri yüklendi. Uygulamayı yeniden başlat.', [
+              Alert.alert(t('settings.importSuccessTitle'), t('settings.importSuccessMsg'), [
                 {
-                  text: 'Tamam',
+                  text: t('common.ok'),
                   onPress: () => router.replace('/(onboarding)/niche-select'),
                 },
               ]);
             } else {
-              Alert.alert('Geri yükleme başarısız', result.error ?? 'Bilinmeyen hata');
+              Alert.alert(t('settings.importErrorTitle'), result.error ?? t('settings.importErrorUnknown'));
             }
           },
         },
@@ -375,11 +411,12 @@ const pickNiche = async (id: string) => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView style={[styles.container, { backgroundColor: colors.bg }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
+      <PageHint hintId="settings" title={t('pageHints.settings.title')} description={t('pageHints.settings.desc')} />
       <View style={styles.brandRow}>
         <Text style={styles.brandIcon}>🧭</Text>
         <View>
           <Text style={[styles.brandName, { color: colors.text }]}>Compass</Text>
-          <Text style={styles.brandSub}>İlham Pusulam · v{APP_VERSION}</Text>
+          <Text style={styles.brandSub}>{t('settings.brandSub', { version: APP_VERSION })}</Text>
         </View>
       </View>
 
@@ -401,10 +438,15 @@ const pickNiche = async (id: string) => {
         })}
       </View>
       <Pressable onPress={openLanguagePicker} style={styles.linkBtn}>
-        <Text style={styles.linkBtnText}>Yeniden seç (tüm diller) →</Text>
+        <Text style={styles.linkBtnText}>{t('settings.langPickerReselect')}</Text>
       </Pressable>
+      {__DEV__ && (
+        <Pressable onPress={onResetLanguage} style={[styles.dangerOutline, { marginTop: 4 }]}>
+          <Text style={styles.dangerOutlineText}>{t('langReset.title')}</Text>
+        </Pressable>
+      )}
 
-      <Text style={styles.section}>Tema</Text>
+      <Text style={styles.section}>{t('settings.theme')}</Text>
       <View style={styles.row}>
         {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => (
           <Pressable
@@ -413,7 +455,7 @@ const pickNiche = async (id: string) => {
             style={[styles.chip, mode === m && styles.chipActive]}
           >
             <Text style={[styles.chipText, mode === m && styles.chipTextActive]}>
-              {m === 'light' ? '☀️ Açık' : m === 'dark' ? '🌙 Koyu' : '⚙️ Sistem'}
+              {m === 'light' ? t('settings.themeLight') : m === 'dark' ? t('settings.themeDark') : t('settings.themeSystem')}
             </Text>
           </Pressable>
         ))}
@@ -433,43 +475,41 @@ const pickNiche = async (id: string) => {
         </Pressable>
       </View>
 
-      <Text style={styles.section}>Profil</Text>
+      <Text style={styles.section}>{t('settings.profile')}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>Deneyim seviyesi</Text>
+        <Text style={styles.cardLabel}>{t('settings.experienceLevel')}</Text>
         <Text style={styles.cardValue}>
-          {experience ? LEVEL_LABEL[experience] : '-'}
+          {experience ? t(LEVEL_LABEL_KEY[experience]) : '-'}
         </Text>
         <Pressable onPress={changeExperience} style={styles.btn}>
-          <Text style={styles.btnText}>Değiştir</Text>
+          <Text style={styles.btnText}>{t('settings.changeExperience')}</Text>
         </Pressable>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>Hedefin</Text>
-        <Text style={styles.cardValue}>{goal ? GOAL_LABEL[goal] : '-'}</Text>
+        <Text style={styles.cardLabel}>{t('settings.goal')}</Text>
+        <Text style={styles.cardValue}>{goal ? t(GOAL_LABEL_KEY[goal]) : '-'}</Text>
         <Pressable onPress={changeGoal} style={styles.btn}>
-          <Text style={styles.btnText}>Değiştir</Text>
+          <Text style={styles.btnText}>{t('settings.changeExperience')}</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.section}>Plan</Text>
+      <Text style={styles.section}>{t('settings.plan')}</Text>
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardLabel}>Mevcut Plan</Text>
-            <Text style={styles.cardValue}>
-              {plan === 'free' ? 'Free' : plan === 'pro_monthly' ? 'Pro Monthly' : 'Pro Yearly'}
-            </Text>
+            <Text style={styles.cardLabel}>{t('settings.currentPlan')}</Text>
+            <Text style={styles.cardValue}>{t(PLAN_LABEL_KEY[plan])}</Text>
             {plan === 'free' && usage && (
               <Text style={styles.aboutSmall}>
-                Bu ay {usage.count}/{usage.limit} fikir kullanıldı
+                {t('settings.usageMonthly', { count: usage.count, limit: usage.limit })}
               </Text>
             )}
           </View>
           <PlanBadge refreshKey={planRefresh} />
         </View>
         <Pressable onPress={() => router.push('/pricing')} style={styles.btn}>
-          <Text style={styles.btnText}>{plan === 'free' ? '⭐ Pro\'ya Yükselt' : 'Planı Yönet'}</Text>
+          <Text style={styles.btnText}>{plan === 'free' ? t('settings.upgradeBtn') : t('settings.manageBtn')}</Text>
         </Pressable>
         <View style={[styles.emailSub, { marginTop: 8 }]}>
           <Text style={styles.comingSoon}>Demo</Text>
@@ -484,7 +524,7 @@ const pickNiche = async (id: string) => {
               }}
               style={[styles.dangerOutline, { marginTop: 6, alignItems: 'center' }]}
             >
-              <Text style={styles.dangerOutlineText}>Demo: Pro Monthly'ye Geç</Text>
+              <Text style={styles.dangerOutlineText}>{t('settings.demoProMonthly')}</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -497,7 +537,7 @@ const pickNiche = async (id: string) => {
               }}
               style={[styles.dangerOutline, { marginTop: 6, alignItems: 'center' }]}
             >
-              <Text style={styles.dangerOutlineText}>Demo: Free'e Dön</Text>
+              <Text style={styles.dangerOutlineText}>{t('settings.demoFreeBack')}</Text>
             </Pressable>
           )}
         </View>
@@ -505,34 +545,54 @@ const pickNiche = async (id: string) => {
 
       <Text style={styles.section}>{t('settings.about')}</Text>
       <View style={styles.card}>
-        <Text style={styles.aboutText}>
-          Compass — İlham Pusulam, niş bazlı içerik üreticileri için haftalık fikir planlayıcı, hatırlatıcı ve AI asistanıdır.
-        </Text>
-        <Text style={styles.aboutSmall}>Sürüm: v{APP_VERSION}</Text>
+        <Text style={styles.aboutText}>{t('settings.aboutText')}</Text>
+        <Text style={styles.aboutSmall}>{t('settings.version', { version: APP_VERSION })}</Text>
+        {__DEV__ && (
+          <Pressable
+            onPress={async () => {
+              try {
+                await AsyncStorage.removeItem('@content-coach/onboarded');
+              } catch {}
+              if (typeof window !== 'undefined' && window.localStorage) {
+                try {
+                  window.localStorage.removeItem('compass_onboarded');
+                } catch {}
+              }
+              Alert.alert(
+                t('settings.devResetDone'),
+                t('settings.devResetMsg'),
+                [{ text: t('common.ok'), onPress: () => router.replace('/') }]
+              );
+            }}
+            style={[styles.dangerOutline, { marginTop: 10, alignItems: 'center' }]}
+          >
+            <Text style={styles.dangerOutlineText}>{t('settings.devResetOnboarding')}</Text>
+          </Pressable>
+        )}
       </View>
 
-      <Text style={styles.section}>Haftalık Özet</Text>
+      <Text style={styles.section}>{t('settings.weeklySummary')}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>E-posta</Text>
-        <Text style={styles.cardValue}>{email || '— ekle —'}</Text>
+        <Text style={styles.cardLabel}>{t('settings.email')}</Text>
+        <Text style={styles.cardValue}>{email || t('settings.emailPlaceholder')}</Text>
         <Pressable onPress={addEmail} style={styles.btn}>
-          <Text style={styles.btnText}>{email ? 'Değiştir' : 'E-posta ekle'}</Text>
+          <Text style={styles.btnText}>{email ? t('settings.changeEmail') : t('settings.addEmail')}</Text>
         </Pressable>
         {email && (
           <View style={styles.emailSub}>
             <Text style={styles.emailSubText}>
-              ✉️ Her Pazartesi 08:00'de haftanın fikirleri ve streak özeti gönderilecek.
+              {t('settings.emailHint')}
             </Text>
-            <Text style={styles.comingSoon}>Yakında</Text>
+            <Text style={styles.comingSoon}>{t('settings.emailSoon')}</Text>
           </View>
         )}
       </View>
 
-      <Text style={styles.section}>Bildirimler</Text>
+      <Text style={styles.section}>{t('settings.notifications')}</Text>
       <View style={styles.toggleRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.toggleTitle}>Günün fikri</Text>
-          <Text style={styles.toggleSub}>Her sabah 8:00'de tek bildirim</Text>
+          <Text style={styles.toggleTitle}>{t('settings.dailyIdeaTitle')}</Text>
+          <Text style={styles.toggleSub}>{t('settings.dailyIdeaSub')}</Text>
         </View>
         <Switch
           value={dailyIdea}
@@ -542,27 +602,27 @@ const pickNiche = async (id: string) => {
         />
       </View>
 
-      <Text style={styles.section}>Seçici Sıfırlama</Text>
+      <Text style={styles.section}>{t('settings.selectiveReset')}</Text>
       <Pressable onPress={resetFavorites} style={styles.dangerOutline}>
-        <Text style={styles.dangerOutlineText}>Favorileri sil</Text>
+        <Text style={styles.dangerOutlineText}>{t('settings.resetFavorites')}</Text>
       </Pressable>
       <Pressable onPress={resetHistory} style={styles.dangerOutline}>
-        <Text style={styles.dangerOutlineText}>Gecmisi sil</Text>
+        <Text style={styles.dangerOutlineText}>{t('settings.resetHistory')}</Text>
       </Pressable>
       <Pressable onPress={resetStreak} style={styles.dangerOutline}>
-        <Text style={styles.dangerOutlineText}>Streak sifirla</Text>
+        <Text style={styles.dangerOutlineText}>{t('settings.resetStreak')}</Text>
       </Pressable>
       <Pressable onPress={resetCopies} style={styles.dangerOutline}>
-        <Text style={styles.dangerOutlineText}>Kopyalama gecmisini sil</Text>
+        <Text style={styles.dangerOutlineText}>{t('settings.resetCopies')}</Text>
       </Pressable>
 
-      <Text style={styles.section}>🛡 Streak Kalkanları</Text>
+      <Text style={styles.section}>{t('settings.shields')}</Text>
       <View style={styles.card}>
         <View style={styles.shieldRow}>
           <Text style={styles.shieldIcon}>🛡</Text>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.shieldTitle}>{shieldsCount} / 3 kalkanın var</Text>
-            <Text style={styles.shieldSub}>Streak Kalkanları serini korur!</Text>
+            <Text style={styles.shieldTitle}>{t('settings.shieldsCount', { count: shieldsCount })}</Text>
+            <Text style={styles.shieldSub}>{t('settings.shieldsSub')}</Text>
           </View>
         </View>
 
@@ -593,107 +653,103 @@ const pickNiche = async (id: string) => {
         </View>
 
         <Text style={styles.shieldDetail}>
-          • Her 7 gün üst üste içerik ürettiğinde 1 yeni kalkan kazanırsın (max 3).{'\n'}
-          • 1 günü kaçırırsan kalkan otomatik kullanılır, serin sıfırlanmaz.{'\n'}
-          • 7 günde 1 kalkan = %100 koruma. Şansını kaçırma!
+          {t('settings.shieldsDetail1')}{'\n'}
+          {t('settings.shieldsDetail2')}{'\n'}
+          {t('settings.shieldsDetail3')}
         </Text>
 
         <Pressable style={styles.shieldFaqBtn} onPress={() => setShowShieldModal(true)}>
-          <Text style={styles.shieldFaqText}>❓ Kalkan nasıl kullanılır?</Text>
+          <Text style={styles.shieldFaqText}>{t('settings.shieldFaqBtn')}</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.section}>Yedekleme</Text>
+      <Text style={styles.section}>{t('settings.backup')}</Text>
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>Verilerini yedekle</Text>
-        <Text style={styles.backupHint}>
-          Tüm favorileri, geçmişi, üretilenleri ve streak'i tek bir JSON dosyası olarak paylaş.
-        </Text>
+        <Text style={styles.cardLabel}>{t('settings.backupLabel')}</Text>
+        <Text style={styles.backupHint}>{t('settings.backupHint')}</Text>
         <View style={styles.backupRow}>
           <Pressable onPress={onExportBackup} style={[styles.btn, styles.backupBtn]}>
-            <Text style={styles.backupBtnText}>📤 Dışa aktar</Text>
+            <Text style={styles.backupBtnText}>{t('settings.backupExport')}</Text>
           </Pressable>
           <Pressable onPress={onImportBackup} style={[styles.btn, styles.backupBtnAlt]}>
-            <Text style={styles.backupBtnAltText}>📥 Geri yükle</Text>
+            <Text style={styles.backupBtnAltText}>{t('settings.backupImport')}</Text>
           </Pressable>
         </View>
-        <Text style={styles.backupSub}>
-          Dışa aktardığın JSON'ı bir yere kaydet (e-posta, Notlar, Drive). Geri yüklemek için yapıştırman yeterli.
-        </Text>
+        <Text style={styles.backupSub}>{t('settings.backupSub')}</Text>
       </View>
 
-      <Text style={styles.section}>Destek & Paylaş</Text>
+      <Text style={styles.section}>{t('settings.support')}</Text>
       <Pressable onPress={rateApp} style={styles.supportBtn}>
         <Text style={styles.supportBtnIcon}>⭐</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.supportBtnTitle}>Uygulamayı değerlendir</Text>
-          <Text style={styles.supportBtnSub}>Mağazada 5 yıldız bırak ya da bize yaz</Text>
+          <Text style={styles.supportBtnTitle}>{t('settings.rateTitle')}</Text>
+          <Text style={styles.supportBtnSub}>{t('settings.rateSub')}</Text>
         </View>
         <Text style={styles.supportChev}>›</Text>
       </Pressable>
       <Pressable onPress={sendFeedback} style={styles.supportBtn}>
         <Text style={styles.supportBtnIcon}>💌</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.supportBtnTitle}>Geri bildirim gönder</Text>
-          <Text style={styles.supportBtnSub}>Öneri, hata bildirimi ya da teşekkür</Text>
+          <Text style={styles.supportBtnTitle}>{t('settings.feedbackTitle')}</Text>
+          <Text style={styles.supportBtnSub}>{t('settings.feedbackSub')}</Text>
         </View>
         <Text style={styles.supportChev}>›</Text>
       </Pressable>
       <Pressable onPress={shareApp} style={styles.supportBtn}>
         <Text style={styles.supportBtnIcon}>↗</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.supportBtnTitle}>Uygulamayı paylaş</Text>
-          <Text style={styles.supportBtnSub}>Arkadaşlarınla da içerik fikri üretsin</Text>
+          <Text style={styles.supportBtnTitle}>{t('settings.shareTitle')}</Text>
+          <Text style={styles.supportBtnSub}>{t('settings.shareSub')}</Text>
         </View>
         <Text style={styles.supportChev}>›</Text>
       </Pressable>
 
-      <Text style={styles.section}>Tehlikeli Bölge</Text>
+      <Text style={styles.section}>{t('settings.dangerZone')}</Text>
       <Pressable onPress={resetAll} style={styles.dangerBtn}>
-        <Text style={styles.dangerBtnText}>Tüm Uygulama Verisini Sıfırla</Text>
+        <Text style={styles.dangerBtnText}>{t('settings.resetAll')}</Text>
       </Pressable>
     </ScrollView>
 
     <Modal visible={showShieldModal} transparent animationType="fade" onRequestClose={() => setShowShieldModal(false)}>
       <Pressable style={styles.shieldModalBackdrop} onPress={() => setShowShieldModal(false)}>
         <Pressable style={styles.shieldModalCard} onPress={() => {}}>
-          <Text style={styles.shieldModalTitle}>🛡️ Kalkan Nasıl Kullanılır?</Text>
-          <Text style={styles.shieldModalSub}>Kalkanlar serini korur</Text>
+          <Text style={styles.shieldModalTitle}>{t('settings.shieldModalTitle')}</Text>
+          <Text style={styles.shieldModalSub}>{t('settings.shieldModalSub')}</Text>
 
           <View style={styles.shieldStep}>
             <Text style={styles.shieldStepNum}>1</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.shieldStepTitle}>+1 Kalkan Kazan 🛡</Text>
-              <Text style={styles.shieldStepDesc}>Her 7 gün üst üste içerik üret, 1 yeni kalkan kazan.</Text>
+              <Text style={styles.shieldStepTitle}>{t('settings.shieldStep1Title')}</Text>
+              <Text style={styles.shieldStepDesc}>{t('settings.shieldStep1Desc')}</Text>
             </View>
           </View>
 
           <View style={styles.shieldStep}>
             <Text style={styles.shieldStepNum}>2</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.shieldStepTitle}>Maks 3 Kalkan</Text>
-              <Text style={styles.shieldStepDesc}>En fazla 3 kalkan biriktirebilirsin. Fazlası birikmez.</Text>
+              <Text style={styles.shieldStepTitle}>{t('settings.shieldStep2Title')}</Text>
+              <Text style={styles.shieldStepDesc}>{t('settings.shieldStep2Desc')}</Text>
             </View>
           </View>
 
           <View style={styles.shieldStep}>
             <Text style={styles.shieldStepNum}>3</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.shieldStepTitle}>Otomatik Koruma</Text>
-              <Text style={styles.shieldStepDesc}>1 günü kaçırırsan kalkan otomatik kullanılır, serin sıfırlanmaz.</Text>
+              <Text style={styles.shieldStepTitle}>{t('settings.shieldStep3Title')}</Text>
+              <Text style={styles.shieldStepDesc}>{t('settings.shieldStep3Desc')}</Text>
             </View>
           </View>
 
           <View style={styles.shieldStep}>
             <Text style={styles.shieldStepNum}>4</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.shieldStepTitle}>Streak'e Devam Et!</Text>
-              <Text style={styles.shieldStepDesc}>Yeni kalkan kazanmak için üretim serisine devam et.</Text>
+              <Text style={styles.shieldStepTitle}>{t('settings.shieldStep4Title')}</Text>
+              <Text style={styles.shieldStepDesc}>{t('settings.shieldStep4Desc')}</Text>
             </View>
           </View>
 
           <Pressable style={styles.shieldModalBtn} onPress={() => setShowShieldModal(false)}>
-            <Text style={styles.shieldModalBtnText}>Anladım ✓</Text>
+            <Text style={styles.shieldModalBtnText}>{t('settings.shieldModalBtn')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>
@@ -984,7 +1040,7 @@ function NichePickerOverlay({
           </Pressable>
         </View>
         <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12, lineHeight: 18 }}>
-          İçerik fikirleri ve planlar bu nişe göre hazırlanır.
+          {t('home.nicheHint')}
         </Text>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }}>
           {niches.map((n) => {
@@ -1009,7 +1065,7 @@ function NichePickerOverlay({
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>{t(`niches.${n.id}`, n.id)}</Text>
                   {n.description && (
-                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{n.description}</Text>
+                    <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{t(`descriptions.${n.id}`, n.description)}</Text>
                   )}
                 </View>
                 {isSel && (

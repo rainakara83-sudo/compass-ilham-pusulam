@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Clipboard, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import { addCopyToHistory, addIdeaTag, getAllUniqueTags, getCollections, getIdeaCollections, getIdeaTags, isFavorite, addIdeaToCollection, removeIdeaFromCollection, removeIdeaTag, toggleFavorite } from '../../services/storage';
 import { generateIdeaVariants, askAI } from '../../services/aiService';
 import { NicheId, searchNichePool } from '../../services/contentService';
@@ -14,43 +15,54 @@ const ICONS = (niches as { id: string; icon: string }[]).reduce((acc, n) => {
 
 type HelperKind = 'caption' | 'hashtag' | 'altTitle' | 'story' | 'tip';
 
-const HELPERS: { id: HelperKind; icon: string; label: string; prompt: (idea: string) => string }[] = [
-  {
-    id: 'caption',
-    icon: '✍️',
-    label: 'Caption yaz',
-    prompt: (idea) =>
-      `Bu içerik fikri için Instagram/Twitter caption öner: "${idea}". 3 farklı tonla (samimi/merak/profesyonel), her biri 1-2 cümle. Türkçe yaz.`,
-  },
-  {
-    id: 'hashtag',
-    icon: '#️⃣',
-    label: 'Hashtag öner',
-    prompt: (idea) =>
-      `Şu fikir için 12-15 adet yüksek etkileşimli Türkçe hashtag öner: "${idea}". Karışık (genel + niş + uzun kuyruk). Yıldız işareti olmadan, sadece boşlukla ayrılmış liste olarak.`,
-  },
-  {
-    id: 'altTitle',
-    icon: '✏️',
-    label: 'Alternatif başlık',
-    prompt: (idea) =>
-      `Şu fikri dikkat çekici 5 farklı başlıkla yeniden yaz: "${idea}". Kısa, merak uyandıran, emoji'siz. Her birini yeni satıra yaz.`,
-  },
-  {
-    id: 'story',
-    icon: '📱',
-    label: 'Story taslağı',
-    prompt: (idea) =>
-      `Şu içerik fikri için 5 karelik Instagram Story taslağı hazırla: "${idea}". Her kare için: kısa başlık + ne paylaşılacağı + 1-2 saniyelik metin. Türkçe yaz, madde madde.`,
-  },
-  {
-    id: 'tip',
-    icon: '💡',
-    label: 'Prodüksiyon ipucu',
-    prompt: (idea) =>
-      `Şu içerik fikrini prodüksiyon olarak nasıl en iyi yakalarım: "${idea}". Çekim/ışık/ses/editing açısından 3-4 pratik ipucu ver. Türkçe, madde madde.`,
-  },
-];
+const HELPER_IDS: HelperKind[] = ['caption', 'hashtag', 'altTitle', 'story', 'tip'];
+
+const HELPER_ICONS: Record<HelperKind, string> = {
+  caption: '✍️',
+  hashtag: '#️⃣',
+  altTitle: '✏️',
+  story: '📱',
+  tip: '💡',
+};
+
+const HELPER_PROMPT_TEMPLATES: Record<HelperKind, string> = {
+  caption: 'Bu içerik fikri için Instagram/Twitter caption öner: "{idea}". 3 farklı tonla (samimi/merak/profesyonel), her biri 1-2 cümle. Türkçe yaz.',
+  hashtag: 'Şu fikir için 12-15 adet yüksek etkileşimli Türkçe hashtag öner: "{idea}". Karışık (genel + niş + uzun kuyruk). Yıldız işareti olmadan, sadece boşlukla ayrılmış liste olarak.',
+  altTitle: 'Şu fikri dikkat çekici 5 farklı başlıkla yeniden yaz: "{idea}". Kısa, merak uyandıran, emoji\'siz. Her birini yeni satıra yaz.',
+  story: 'Şu içerik fikri için 5 karelik Instagram Story taslağı hazırla: "{idea}". Her kare için: kısa başlık + ne paylaşılacağı + 1-2 saniyelik metin. Türkçe yaz, madde madde.',
+  tip: 'Şu içerik fikrini prodüksiyon olarak nasıl en iyi yakalarım: "{idea}". Çekim/ışık/ses/editing açısından 3-4 pratik ipucu ver. Türkçe, madde madde.',
+};
+
+const buildHelperPrompt = (kind: HelperKind, idea: string): string => {
+  return HELPER_PROMPT_TEMPLATES[kind].replace('{idea}', idea);
+};
+
+type DayCode = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+const LONG_TO_CODE: Record<string, DayCode> = {
+  monday: 'mon', tuesday: 'tue', wednesday: 'wed', thursday: 'thu', friday: 'fri', saturday: 'sat', sunday: 'sun',
+  mon: 'mon', tue: 'tue', wed: 'wed', thu: 'thu', fri: 'fri', sat: 'sat', sun: 'sun',
+};
+
+const DAY_INDEX_MAP: Record<string, number> = {
+  mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
+};
+
+const formatDayUpper = (day: string | null): string => {
+  if (!day) return '';
+  const code = LONG_TO_CODE[day.toLowerCase()] ?? (day as DayCode);
+  const idx = DAY_INDEX_MAP[code];
+  if (idx === undefined) return day.toUpperCase();
+  const lng = (i18n.language || 'en').split('-')[0];
+  const base = new Date(2024, 0, 1);
+  const diff = (idx - base.getDay() + 7) % 7;
+  base.setDate(base.getDate() + diff);
+  try {
+    return new Intl.DateTimeFormat(lng, { weekday: 'long' }).format(base).toUpperCase();
+  } catch {
+    return day.toUpperCase();
+  }
+};
 
 const FALLBACK_BY_KIND: Record<HelperKind, (idea: string, niche: NicheId | null) => string> = {
   caption: (idea) =>
@@ -81,7 +93,7 @@ const Action: React.FC<{ icon: string; label: string; onPress: () => void; prima
 
 export default function IdeaDetailModal() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const params = useLocalSearchParams<{ text: string; niche?: string; day?: string; source?: string }>();
   const text = typeof params.text === 'string' ? decodeURIComponent(params.text) : '';
   const niche = typeof params.niche === 'string' ? (params.niche as NicheId) : null;
@@ -108,17 +120,40 @@ export default function IdeaDetailModal() {
   const [variantCopiedIdx, setVariantCopiedIdx] = useState<number | null>(null);
   const [allCollections, setAllCollections] = useState<{ id: string; name: string; color: string }[]>([]);
   const [linkedCollections, setLinkedCollections] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const tt = useCallback(
+    (key: string, opts?: Record<string, unknown>): string => {
+      try {
+        const v = t(key, opts as never);
+        return typeof v === 'string' && v.length > 0 ? v : key;
+      } catch {
+        return key;
+      }
+    },
+    [t],
+  );
 
   const loadTags = useCallback(async () => {
-    const [t, all] = await Promise.all([getIdeaTags(text), getAllUniqueTags()]);
-    setTags(t);
-    setAllTags(all);
+    try {
+      const [tg, all] = await Promise.all([getIdeaTags(text), getAllUniqueTags()]);
+      setTags(tg);
+      setAllTags(all);
+    } catch (e) {
+      setTags([]);
+      setAllTags([]);
+    }
   }, [text]);
 
   const loadCollections = useCallback(async () => {
-    const [cols, linked] = await Promise.all([getCollections(), getIdeaCollections(text)]);
-    setAllCollections(cols.map((c) => ({ id: c.id, name: c.name, color: c.color })));
-    setLinkedCollections(linked.map((c) => c.id));
+    try {
+      const [cols, linked] = await Promise.all([getCollections(), getIdeaCollections(text)]);
+      setAllCollections(cols.map((c) => ({ id: c.id, name: c.name, color: c.color })));
+      setLinkedCollections(linked.map((c) => c.id));
+    } catch (e) {
+      setAllCollections([]);
+      setLinkedCollections([]);
+    }
   }, [text]);
 
   useEffect(() => {
@@ -132,13 +167,14 @@ export default function IdeaDetailModal() {
 
   useEffect(() => {
     if (niche) {
-      const pool = searchNichePool(niche, '');
+      const lng = (i18n.language || 'en').split('-')[0] as 'tr' | 'en' | 'es' | 'de' | 'fr';
+      const pool = searchNichePool(niche, '', lng);
       const filtered = pool.filter((p) => p !== text).slice(0, 3);
       setRelatedIdeas(filtered);
     } else {
       setRelatedIdeas([]);
     }
-  }, [niche, text]);
+  }, [niche, text, i18n.language]);
 
   const onCopy = () => {
     Clipboard.setString(text);
@@ -150,7 +186,7 @@ export default function IdeaDetailModal() {
   const onShare = async () => {
     setBusy(true);
     try {
-      await Share.share({ message: `İçerik fikri: ${text}`, title: 'Compass — İlham Pusulam' });
+      await Share.share({ message: t('ideaDetail.shareMessage', { text }), title: t('ideaDetail.shareTitle') });
       setShared(true);
       setTimeout(() => setShared(false), 1500);
     } finally {
@@ -215,13 +251,8 @@ export default function IdeaDetailModal() {
     setHelperError(null);
     setHelperCopied(false);
     setHelperLoading(true);
-    const helper = HELPERS.find((h) => h.id === kind);
-    if (!helper) {
-      setHelperLoading(false);
-      return;
-    }
     if (niche) {
-      const ai = await askAI({ niche, question: helper.prompt(text) });
+      const ai = await askAI({ niche, question: buildHelperPrompt(kind, text) });
       if (ai.answer && !ai.answer.includes('cevap veremiyorum') && !ai.answer.includes('hatası') && !ai.answer.includes('zaman aşımı') && !ai.answer.includes('sık istek')) {
         setHelperAnswer(ai.answer);
         setHelperLoading(false);
@@ -229,7 +260,7 @@ export default function IdeaDetailModal() {
       }
     }
     const fallback = FALLBACK_BY_KIND[kind](text, niche);
-    setHelperAnswer(fallback + '\n\n— (AI şu an yanıt vermedi; akıllı öneri kullanıldı)');
+    setHelperAnswer(fallback + '\n\n— ' + t('ideaDetail.aiFallbackNote'));
     setHelperError('offline');
     setHelperLoading(false);
   };
@@ -257,11 +288,26 @@ export default function IdeaDetailModal() {
     <View style={styles.container}>
       <Stack.Screen options={{ presentation: 'modal', title: '', headerShown: false }} />
 
+      {!text ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 48, marginBottom: 12 }}>💭</Text>
+          <Text style={{ fontSize: 16, color: '#111827', fontWeight: '700', marginBottom: 6, textAlign: 'center' }}>
+            {tt('ideaDetail.notFoundTitle')}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', marginBottom: 16, lineHeight: 18 }}>
+            {tt('ideaDetail.notFoundBody')}
+          </Text>
+          <Pressable onPress={() => router.back()} style={styles.helperHintCard}>
+            <Text style={styles.helperHintText}>← {tt('ideaDetail.back')}</Text>
+          </Pressable>
+        </View>
+      ) : (
+      <>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.closeBtnText}>✕</Text>
         </Pressable>
-        <Text style={styles.topTitle}>İçerik Detayı</Text>
+        <Text style={styles.topTitle}>{t('ideaDetail.title')}</Text>
         <View style={{ width: 36 }} />
       </View>
 
@@ -270,24 +316,28 @@ export default function IdeaDetailModal() {
           <View style={styles.metaRow}>
             <Text style={styles.metaIcon}>{ICONS[niche] ?? '✨'}</Text>
             <Text style={styles.metaText}>
-              {t(`niches.${niche}`, niche)} {day ? ` • ${day.toUpperCase()}` : ''} {source === 'ai' ? ' • ✨ AI' : ''}
+              {t(`niches.${niche}`, niche)} {day ? ` • ${formatDayUpper(day)}` : ''} {source === 'ai' ? ' • ✨ AI' : ''}
             </Text>
           </View>
         )}
 
         <Text style={styles.bigText}>{text}</Text>
 
+        {((i18n.language || 'en').split('-')[0] !== 'tr') && (
+          <Text style={styles.reloadHint}>💡 {t('ideaDetail.reloadForEnglish')}</Text>
+        )}
+
         <View style={styles.tagsBox}>
           <View style={styles.tagsHeaderRow}>
-            <Text style={styles.tagsTitle}>🏷 Etiketler</Text>
+            <Text style={styles.tagsTitle}>🏷 {t('ideaDetail.tags')}</Text>
             <Pressable onPress={() => setShowTagInput((s) => !s)} style={styles.tagsAddBtn}>
-              <Text style={styles.tagsAddBtnTxt}>{showTagInput ? 'Vazgeç' : '+ Ekle'}</Text>
+              <Text style={styles.tagsAddBtnTxt}>{showTagInput ? t('ideaDetail.cancel') : '+ ' + t('ideaDetail.add')}</Text>
             </Pressable>
           </View>
 
           <View style={styles.tagsChipRow}>
             {tags.length === 0 ? (
-              <Text style={styles.tagsEmpty}>Henüz etiket yok. Fikri organize etmek için ekle.</Text>
+              <Text style={styles.tagsEmpty}>{t('ideaDetail.noTagsYet')}</Text>
             ) : (
               tags.map((t) => (
                 <Pressable key={t} onPress={() => onRemoveTag(t)} style={styles.tagChip}>
@@ -302,7 +352,7 @@ export default function IdeaDetailModal() {
               <TextInput
                 value={tagDraft}
                 onChangeText={setTagDraft}
-                placeholder="örn: reels, tutorial, vlog"
+                placeholder={t('ideaDetail.tagPlaceholder')}
                 placeholderTextColor="#9CA3AF"
                 style={styles.tagInput}
                 autoFocus
@@ -313,14 +363,14 @@ export default function IdeaDetailModal() {
                 onPress={() => onAddTag(tagDraft)}
                 style={styles.tagInputSave}
               >
-                <Text style={styles.tagInputSaveTxt}>Kaydet</Text>
+                <Text style={styles.tagInputSaveTxt}>{t('ideaDetail.save')}</Text>
               </Pressable>
             </View>
           )}
 
           {showTagInput && allTags.filter((t) => !tags.includes(t)).length > 0 && (
             <View style={styles.tagsSuggestRow}>
-              <Text style={styles.tagsSuggestLabel}>Önerilen:</Text>
+              <Text style={styles.tagsSuggestLabel}>{t('ideaDetail.suggested')}:</Text>
               {allTags
                 .filter((t) => !tags.includes(t))
                 .slice(0, 6)
@@ -335,10 +385,10 @@ export default function IdeaDetailModal() {
 
         <View style={styles.variantsBox}>
           <View style={styles.variantsHeader}>
-            <Text style={styles.variantsTitle}>🎭 Alternatifler</Text>
+            <Text style={styles.variantsTitle}>🎭 {t('ideaDetail.alternatives')}</Text>
             <Pressable onPress={generateVariants} disabled={variantsLoading} style={styles.variantsGenBtn}>
               <Text style={styles.variantsGenBtnTxt}>
-                {variantsLoading ? '⏳ Üretiliyor…' : variants.length > 0 ? '↻ Yenile' : '✨ Üret'}
+                {variantsLoading ? '⏳ ' + t('ideaDetail.generating') : variants.length > 0 ? '↻ ' + t('ideaDetail.refresh') : '✨ ' + t('ideaDetail.generate')}
               </Text>
             </Pressable>
           </View>
@@ -346,12 +396,12 @@ export default function IdeaDetailModal() {
           {variantsLoading && (
             <View style={styles.variantsLoading}>
               <ActivityIndicator color="#8B5CF6" />
-              <Text style={styles.variantsLoadingTxt}>AI varyasyonlar hazırlıyor…</Text>
+              <Text style={styles.variantsLoadingTxt}>{t('ideaDetail.aiPreparingVariants')}</Text>
             </View>
           )}
 
           {!variantsLoading && variantsFallback && variants.length > 0 && (
-            <Text style={styles.variantsHint}>📴 AI çevrimdışı — benzer fikirlerden önerildi</Text>
+            <Text style={styles.variantsHint}>{t('ideaDetail.variantsFallbackHint')}</Text>
           )}
 
           {!variantsLoading && variants.length > 0 && (
@@ -373,19 +423,19 @@ export default function IdeaDetailModal() {
           )}
 
           {!variantsLoading && variants.length === 0 && (
-            <Text style={styles.variantsEmpty}>Fikrin farklı versiyonlarını üretmek için “Üret”e dokun.</Text>
+            <Text style={styles.variantsEmpty}>{t('ideaDetail.variantsEmpty')}</Text>
           )}
         </View>
 
         <View style={styles.collectionsBox}>
           <View style={styles.collectionsHeader}>
-            <Text style={styles.collectionsTitle}>📚 Paketler</Text>
+            <Text style={styles.collectionsTitle}>📚 {t('ideaDetail.packs')}</Text>
             <Pressable onPress={() => router.push('/collections')} style={styles.collectionsOpenBtn}>
-              <Text style={styles.collectionsOpenBtnTxt}>Tümü ›</Text>
+              <Text style={styles.collectionsOpenBtnTxt}>{t('ideaDetail.all')} ›</Text>
             </Pressable>
           </View>
           {allCollections.length === 0 ? (
-            <Text style={styles.collectionsEmpty}>Henüz paket yok. “Tümü”nden oluşturabilirsin.</Text>
+            <Text style={styles.collectionsEmpty}>{t('ideaDetail.noPacksYet')}</Text>
           ) : (
             <View style={styles.collectionsChipRow}>
               {allCollections.map((c) => {
@@ -425,9 +475,9 @@ export default function IdeaDetailModal() {
         </View>
 
         <View style={styles.statRow}>
-          <Stat icon={fav ? '★' : '☆'} label={fav ? 'Favorilerde' : 'Favoriye ekle'} color={fav ? '#F59E0B' : '#6B7280'} />
-          <Stat icon="⧉" label="Kopyala" color="#4D96FF" />
-          <Stat icon="↗" label="Paylaş" color="#10B981" />
+          <Stat icon={fav ? '★' : '☆'} label={fav ? t('ideaDetail.inFavorites') : t('ideaDetail.addFavorite')} color={fav ? '#F59E0B' : '#6B7280'} />
+          <Stat icon="⧉" label={t('ideaDetail.copy')} color="#4D96FF" />
+          <Stat icon="↗" label={t('ideaDetail.share')} color="#10B981" />
         </View>
 
         <View style={styles.hashtagQuickBox}>
@@ -437,25 +487,25 @@ export default function IdeaDetailModal() {
           >
             <Text style={styles.hashtagQuickIcon}>#</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.hashtagQuickTitle}>Hashtag Paketi Üret</Text>
-              <Text style={styles.hashtagQuickSub}>15 hashtag öneri, seç, kopyala veya etiketle</Text>
+              <Text style={styles.hashtagQuickTitle}>{t('ideaDetail.hashtagPackTitle')}</Text>
+              <Text style={styles.hashtagQuickSub}>{t('ideaDetail.hashtagPackSub')}</Text>
             </View>
             <Text style={styles.hashtagQuickChev}>›</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.section}>✨ AI Yardımcı</Text>
+        <Text style={styles.section}>{t('ideaDetail.aiHelperSection')}</Text>
         <View style={styles.helperGrid}>
-          {HELPERS.map((h) => (
+          {HELPER_IDS.map((id) => (
             <Pressable
-              key={h.id}
-              onPress={() => runHelper(h.id)}
+              key={id}
+              onPress={() => runHelper(id)}
               disabled={helperLoading}
-              style={[styles.helperChip, activeKind === h.id && styles.helperChipActive]}
+              style={[styles.helperChip, activeKind === id && styles.helperChipActive]}
             >
-              <Text style={styles.helperIcon}>{h.icon}</Text>
-              <Text style={[styles.helperLabel, activeKind === h.id && styles.helperLabelActive]}>
-                {h.label}
+              <Text style={styles.helperIcon}>{HELPER_ICONS[id]}</Text>
+              <Text style={[styles.helperLabel, activeKind === id && styles.helperLabelActive]}>
+                {t(`ideaDetail.helper.${id}`)}
               </Text>
             </Pressable>
           ))}
@@ -464,13 +514,13 @@ export default function IdeaDetailModal() {
         {helperLoading && (
           <View style={styles.helperBox}>
             <ActivityIndicator color="#4D96FF" />
-            <Text style={styles.helperLoadingText}>AI düşünüyor…</Text>
+            <Text style={styles.helperLoadingText}>{t('ideaDetail.aiThinking')}</Text>
           </View>
         )}
 
         {helperError === 'offline' && !helperLoading && (
           <View style={styles.helperOffline}>
-            <Text style={styles.helperOfflineText}>📴 AI çevrimdışı — akıllı öneri gösteriliyor</Text>
+            <Text style={styles.helperOfflineText}>{t('ideaDetail.aiOffline')}</Text>
           </View>
         )}
 
@@ -478,17 +528,17 @@ export default function IdeaDetailModal() {
           <View style={styles.helperBox}>
             <Text style={styles.helperAnswer}>{helperAnswer}</Text>
             <Pressable onPress={copyHelper} style={styles.helperCopyBtn}>
-              <Text style={styles.helperCopyText}>{helperCopied ? '✓ Kopyalandı' : '⧉ Cevabı kopyala'}</Text>
+              <Text style={styles.helperCopyText}>{helperCopied ? '✓ ' + t('ideaDetail.copied') : '⧉ ' + t('ideaDetail.copyAnswer')}</Text>
             </Pressable>
           </View>
         )}
 
         {relatedIdeas.length > 0 && (
           <>
-            <Text style={styles.section}>🔗 İlgili fikirler</Text>
+            <Text style={styles.section}>{t('ideaDetail.relatedIdeas')}</Text>
             {relatedIdeas.map((r, idx) => (
               <Pressable key={`${r}-${idx}`} onPress={() => openRelated(r)} style={styles.relatedCard}>
-                <Text style={styles.relatedDay}>Pzt/Sal/Çr</Text>
+                <Text style={styles.relatedDay}>{t('ideaDetail.dayShortcut')}</Text>
                 <Text style={styles.relatedText}>{r}</Text>
                 <Text style={styles.relatedChev}>›</Text>
               </Pressable>
@@ -499,26 +549,28 @@ export default function IdeaDetailModal() {
         {!niche && (
           <Pressable
             onPress={() =>
-              Alert.alert('Niş seç', 'İlgili fikirleri görmek için bir niş seçmelisin. Ayarlardan ayarlayabilirsin.')
+              Alert.alert(t('ideaDetail.nicheSelectTitle'), t('ideaDetail.nicheSelectBody'))
             }
             style={styles.helperHintCard}
           >
             <Text style={styles.helperHintIcon}>💡</Text>
-            <Text style={styles.helperHintText}>İlgili fikir önerileri için bir niş seçili olmalı.</Text>
+            <Text style={styles.helperHintText}>{t('ideaDetail.nicheHint')}</Text>
           </Pressable>
         )}
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        <Action icon={fav ? '★' : '☆'} label={fav ? 'Favoride' : 'Favori'} onPress={onFav} />
+        <Action icon={fav ? '★' : '☆'} label={fav ? t('ideaDetail.favorited') : t('ideaDetail.favorite')} onPress={onFav} />
         <Action
           icon={copied ? '✓' : '⧉'}
-          label={copied ? 'Kopyalandı' : 'Kopyala'}
+          label={copied ? t('ideaDetail.copied') : t('ideaDetail.copy')}
           onPress={onCopy}
           primary
         />
-        <Action icon={busy ? '…' : '↗'} label={shared ? 'Paylaşıldı' : 'Paylaş'} onPress={onShare} />
+        <Action icon={busy ? '…' : '↗'} label={shared ? t('ideaDetail.shared') : t('ideaDetail.share')} onPress={onShare} />
       </View>
+      </>
+      )}
     </View>
   );
 }
@@ -550,6 +602,7 @@ const styles = StyleSheet.create({
   metaIcon: { fontSize: 18, marginRight: 6 },
   metaText: { fontSize: 13, color: '#6B7280', textTransform: 'capitalize' },
   bigText: { fontSize: 22, color: '#111827', fontWeight: '600', lineHeight: 32, marginBottom: 16 },
+  reloadHint: { fontSize: 12, color: '#92400E', backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, marginBottom: 12, fontWeight: '600' },
   tagsBox: {
     backgroundColor: 'white',
     padding: 14,

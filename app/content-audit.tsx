@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import {
   AuditEntry,
   AuditPlatform,
@@ -27,6 +28,7 @@ import {
   addCopyToHistory,
 } from '../services/storage';
 import niches from '../data/niches.json';
+import i18n from '../i18n';
 
 const NICHES: { id: string; icon: string; color: string; label: string }[] = niches.map(n => ({
   id: n.id,
@@ -43,7 +45,9 @@ const formatNumber = (n: number): string => {
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const lng = (i18n.language || 'en').split('-')[0];
+  const localeTag = lng === 'tr' ? 'tr-TR' : lng === 'es' ? 'es-ES' : lng === 'de' ? 'de-DE' : lng === 'fr' ? 'fr-FR' : 'en-US';
+  return d.toLocaleDateString(localeTag, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
 const scoreColor = (s: number): string => {
@@ -63,6 +67,7 @@ const scoreEmoji = (s: number): string => {
 export default function ContentAuditScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [list, setList] = useState<AuditEntry[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -133,14 +138,14 @@ export default function ContentAuditScreen() {
     setSaving(false);
     setTitle('');
     setPreview(null);
-    setToast('Audit kaydedildi ✓');
+    setToast(t('contentAudit.toastSaved'));
   }, [preview]);
 
   const onRemove = useCallback(async (id: string) => {
-    Alert.alert('Sil', 'Bu audit kaydını silmek istediğine emin misin?', [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('contentAudit.deleteTitle'), t('contentAudit.deleteBody'), [
+      { text: t('contentAudit.cancel'), style: 'cancel' },
       {
-        text: 'Sil',
+        text: t('contentAudit.delete'),
         style: 'destructive',
         onPress: async () => {
           const next = await removeAudit(id);
@@ -153,15 +158,15 @@ export default function ContentAuditScreen() {
 
   const onClear = useCallback(() => {
     if (list.length === 0) return;
-    Alert.alert('Tümünü sil', `${list.length} kayıt silinecek. Emin misin?`, [
-      { text: 'Vazgeç', style: 'cancel' },
+    Alert.alert(t('contentAudit.clearAllTitle'), t('contentAudit.clearAllBody', { count: list.length }), [
+      { text: t('contentAudit.cancel'), style: 'cancel' },
       {
-        text: 'Hepsini sil',
+        text: t('contentAudit.deleteAll'),
         style: 'destructive',
         onPress: async () => {
           await clearAudits();
           setList([]);
-          setToast('Tüm audit kayıtları silindi');
+          setToast(t('contentAudit.toastCleared'));
         },
       },
     ]);
@@ -170,7 +175,7 @@ export default function ContentAuditScreen() {
   const onCopy = useCallback(async (text: string) => {
     Clipboard.setString(text);
     await addCopyToHistory(text, 'pool');
-    setToast('Kopyalandı ✓');
+    setToast(t('contentAudit.toastCopied'));
   }, []);
 
   const onSaveNotes = useCallback(
@@ -179,7 +184,7 @@ export default function ContentAuditScreen() {
       if (note === undefined) return;
       const next = await updateAudit(id, { notes: note });
       setList(next);
-      setToast('Not güncellendi ✓');
+      setToast(t('contentAudit.toastNoteSaved'));
       setNotesDraft(prev => {
         const c = { ...prev };
         delete c[id];
@@ -228,7 +233,7 @@ export default function ContentAuditScreen() {
     <View style={styles.root}>
       <Stack.Screen
         options={{
-          title: 'Content Audit',
+          title: t('contentAudit.title'),
           headerStyle: { backgroundColor: '#0f172a' },
           headerTintColor: '#f8fafc',
         }}
@@ -238,22 +243,23 @@ export default function ContentAuditScreen() {
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.intro}>
+        <Text style={styles.intro}>{t('contentAudit.intro')}
+          
           Geçmiş bir içeriğin metriklerini gir, otomatik karar (öldür/pivot/spike/double_down) al.
         </Text>
 
         {/* TITLE */}
-        <Text style={styles.sectionLabel}>İçerik başlığı</Text>
+        <Text style={styles.sectionLabel}>{t('contentAudit.contentTitle')}</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="Örn: 5 dakikada akşam yemeği"
+          placeholder={t('contentAudit.titlePlaceholder')}
           placeholderTextColor="#475569"
           style={styles.input}
         />
 
         {/* PLATFORM */}
-        <Text style={styles.sectionLabel}>Platform</Text>
+        <Text style={styles.sectionLabel}>{t('contentAudit.platform')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {AUDIT_PLATFORMS.map(p => {
             const active = platform === p.id;
@@ -271,7 +277,7 @@ export default function ContentAuditScreen() {
         </ScrollView>
 
         {/* NICHE */}
-        <Text style={styles.sectionLabel}>Niche</Text>
+        <Text style={styles.sectionLabel}>{t('contentAudit.niche')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
           {NICHES.map(n => {
             const active = niche === n.id;
@@ -289,10 +295,10 @@ export default function ContentAuditScreen() {
         </ScrollView>
 
         {/* METRICS */}
-        <Text style={styles.sectionLabel}>Metrikler</Text>
+        <Text style={styles.sectionLabel}>{t('contentAudit.metrics')}</Text>
         <View style={styles.metricsGrid}>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Erişim</Text>
+            <Text style={styles.metricLabel}>{t('contentAudit.reach')}</Text>
             <TextInput
               value={reach}
               onChangeText={setReach}
@@ -302,7 +308,7 @@ export default function ContentAuditScreen() {
             />
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Beğeni</Text>
+            <Text style={styles.metricLabel}>{t('contentAudit.likes')}</Text>
             <TextInput
               value={likes}
               onChangeText={setLikes}
@@ -312,7 +318,7 @@ export default function ContentAuditScreen() {
             />
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Yorum</Text>
+            <Text style={styles.metricLabel}>{t('contentAudit.comments')}</Text>
             <TextInput
               value={comments}
               onChangeText={setComments}
@@ -322,7 +328,7 @@ export default function ContentAuditScreen() {
             />
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Paylaşım</Text>
+            <Text style={styles.metricLabel}>{t('contentAudit.shares')}</Text>
             <TextInput
               value={shares}
               onChangeText={setShares}
@@ -332,7 +338,7 @@ export default function ContentAuditScreen() {
             />
           </View>
           <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>Kaydetme</Text>
+            <Text style={styles.metricLabel}>{t('contentAudit.saves')}</Text>
             <TextInput
               value={saves}
               onChangeText={setSaves}
@@ -344,19 +350,19 @@ export default function ContentAuditScreen() {
         </View>
 
         {/* TAGS */}
-        <Text style={styles.sectionLabel}>Etiketler</Text>
+        <Text style={styles.sectionLabel}>{t('contentAudit.tags')}</Text>
         <View style={styles.tagsRow}>
           <TextInput
             value={formatTag}
             onChangeText={setFormatTag}
-            placeholder="format (reel, carousel...)"
+            placeholder={t('contentAudit.formatPlaceholder')}
             placeholderTextColor="#475569"
             style={[styles.input, { flex: 1, marginRight: 8, marginBottom: 0 }]}
           />
           <TextInput
             value={topicTag}
             onChangeText={setTopicTag}
-            placeholder="konu"
+            placeholder={t('contentAudit.topicPlaceholder')}
             placeholderTextColor="#475569"
             style={[styles.input, { flex: 1, marginBottom: 0 }]}
           />
@@ -396,10 +402,10 @@ export default function ContentAuditScreen() {
                 onPress={() => onCopy(`${preview.title} — ${AUDIT_VERDICTS[preview.verdict].label}: ${preview.reasoning}`)}
                 style={styles.copyBtn}
               >
-                <Text style={styles.copyBtnText}>📋 Kopyala</Text>
+                <Text style={styles.copyBtnText}>📋 {t('contentAudit.copy')}</Text>
               </Pressable>
               <Pressable onPress={onSave} disabled={saving} style={[styles.saveBtn, saving && { opacity: 0.5 }]}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>💾 Kaydet</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>💾 {t('contentAudit.save')}</Text>}
               </Pressable>
             </View>
           </View>
@@ -414,10 +420,10 @@ export default function ContentAuditScreen() {
         {/* SAVED LIST */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>📋 Audit Listesi ({list.length})</Text>
+            <Text style={styles.cardTitle}>📋 {t('contentAudit.auditList')} ({list.length})</Text>
             {list.length > 0 && (
               <Pressable onPress={onClear}>
-                <Text style={styles.clearBtn}>Tümünü sil</Text>
+                <Text style={styles.clearBtn}>{t('contentAudit.clearAll')}</Text>
               </Pressable>
             )}
           </View>
@@ -425,22 +431,22 @@ export default function ContentAuditScreen() {
           {list.length > 0 && (
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Ortalama skor</Text>
+                <Text style={styles.summaryLabel}>{t('contentAudit.avgScore')}</Text>
                 <Text style={[styles.summaryValue, { color: scoreColor(summary.avgScore) }]}>
                   {summary.avgScore}
                 </Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Toplam erişim</Text>
+                <Text style={styles.summaryLabel}>{t('contentAudit.totalReach')}</Text>
                 <Text style={styles.summaryValue}>{formatNumber(summary.totalReach)}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Genel ER</Text>
+                <Text style={styles.summaryLabel}>{t('contentAudit.overallER')}</Text>
                 <Text style={styles.summaryValue}>%{summary.er}</Text>
               </View>
               {summary.bestFormat && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>En iyi format</Text>
+                  <Text style={styles.summaryLabel}>{t('contentAudit.bestFormat')}</Text>
                   <Text style={[styles.summaryValue, { fontSize: 13 }]}>
                     {summary.bestFormat.name} ({summary.bestFormat.avg})
                   </Text>
@@ -469,7 +475,7 @@ export default function ContentAuditScreen() {
                 style={[styles.filterChip, filterVerdict === 'all' && styles.filterChipActive]}
               >
                 <Text style={[styles.filterChipText, filterVerdict === 'all' && styles.filterChipTextActive]}>
-                  Hepsi ({list.length})
+                  {t('contentAudit.all')} ({list.length})
                 </Text>
               </Pressable>
               {verdictKeys.map(vk => {
@@ -493,7 +499,7 @@ export default function ContentAuditScreen() {
 
           {filteredList.length === 0 ? (
             <Text style={styles.empty}>
-              {list.length === 0 ? 'Henüz audit yok. Yukarıdan içerik ekle.' : 'Bu filtreyle eşleşen audit yok.'}
+              {list.length === 0 ? t('contentAudit.noAudits') : t('contentAudit.noMatch')}
             </Text>
           ) : (
             filteredList.map(a => {
@@ -536,11 +542,11 @@ export default function ContentAuditScreen() {
                       <Text style={styles.entryTags}>
                         🎬 {a.formatTag} · 💡 {a.topicTag}
                       </Text>
-                      <Text style={styles.entryLabel}>Notlar</Text>
+                      <Text style={styles.entryLabel}>{t('contentAudit.notes')}</Text>
                       <TextInput
                         value={notesDraft[a.id] ?? a.notes}
                         onChangeText={txt => setNotesDraft(prev => ({ ...prev, [a.id]: txt }))}
-                        placeholder="Not ekle..."
+                        placeholder={t('contentAudit.notesPlaceholder')}
                         placeholderTextColor="#475569"
                         style={styles.notesInput}
                         multiline
@@ -551,16 +557,16 @@ export default function ContentAuditScreen() {
                           disabled={notesDraft[a.id] === undefined}
                           style={[styles.smallBtn, notesDraft[a.id] === undefined && { opacity: 0.4 }]}
                         >
-                          <Text style={styles.smallBtnText}>💾 Notu kaydet</Text>
+                          <Text style={styles.smallBtnText}>💾 {t('contentAudit.saveNote')}</Text>
                         </Pressable>
                         <Pressable
                           onPress={() => onCopy(`${a.title} — ${verdict.label}: ${a.reasoning}`)}
                           style={styles.smallBtn}
                         >
-                          <Text style={styles.smallBtnText}>📋 Kopyala</Text>
+                          <Text style={styles.smallBtnText}>📋 {t('contentAudit.copy')}</Text>
                         </Pressable>
                         <Pressable onPress={() => onRemove(a.id)} style={[styles.smallBtn, { borderColor: '#F97316' }]}>
-                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>🗑️ Sil</Text>
+                          <Text style={[styles.smallBtnText, { color: '#F97316' }]}>🗑️ {t('contentAudit.delete')}</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -572,7 +578,7 @@ export default function ContentAuditScreen() {
         </View>
 
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Geri</Text>
+          <Text style={styles.backBtnText}>← {t('contentAudit.back')}</Text>
         </Pressable>
       </ScrollView>
 

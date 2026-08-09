@@ -8,16 +8,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   buildCSOPlan,
   clearCSOs,
-  CSO_DAYS,
   CSO_PLATFORMS,
   CSO_SLOTS,
   CSOEntry,
   CSOPlatform,
   CSOSlot,
   getCSOList,
+  getCSODays,
   removeCSO,
   saveCSO,
 } from '../services/storage';
@@ -30,10 +32,12 @@ const formatNumber = (n: number): string => {
 
 const formatDate = (ts: number): string => {
   const d = new Date(ts);
-  return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)}`;
+  const lng = (i18n.language || 'en').split('-')[0];
+  return d.toLocaleDateString(lng, { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
 export default function ContentSlotScreen() {
+  const { i18n: i18nInstance } = useTranslation();
   const [day, setDay] = useState<CSOEntry['day']>('mon');
   const [slot, setSlot] = useState<CSOSlot>('evening');
   const [platform, setPlatform] = useState<CSOPlatform>('instagram');
@@ -41,6 +45,7 @@ export default function ContentSlotScreen() {
   const [format, setFormat] = useState<string>('reel');
   const [list, setList] = useState<CSOEntry[]>([]);
   const [target, setTarget] = useState<string>('5');
+  const CSO_DAYS = useMemo(() => getCSODays(), [i18nInstance.language]);
 
   const load = useCallback(async () => {
     const stored = await getCSOList();
