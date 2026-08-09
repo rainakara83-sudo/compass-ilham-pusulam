@@ -13142,3 +13142,117 @@ export const resetLanguageSelected = async (): Promise<void> => {
     }
   }
 };
+
+const USER_NAME_KEY = '@content-coach/user-name';
+const USER_BIO_KEY = '@content-coach/user-bio';
+
+const trimName = (raw: string | null): string => {
+  if (!raw) return '';
+  const trimmed = raw.trim().slice(0, 30);
+  return trimmed;
+};
+
+const trimBio = (raw: string | null): string => {
+  if (!raw) return '';
+  return raw.trim().slice(0, 200);
+};
+
+export const getUserName = async (): Promise<string> => {
+  try {
+    const raw = await AsyncStorage.getItem(USER_NAME_KEY);
+    if (raw) return trimName(raw);
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const ls = window.localStorage.getItem('compass_user_name');
+      if (ls) return trimName(ls);
+    } catch {
+      // ignore
+    }
+  }
+  return '';
+};
+
+export const setUserName = async (name: string): Promise<string> => {
+  const clean = trimName(name);
+  if (clean.length === 0) {
+    try {
+      await AsyncStorage.removeItem(USER_NAME_KEY);
+    } catch {
+      // ignore
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem('compass_user_name');
+      } catch {
+        // ignore
+      }
+    }
+    return '';
+  }
+  try {
+    await AsyncStorage.setItem(USER_NAME_KEY, clean);
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('compass_user_name', clean);
+    } catch {
+      // ignore
+    }
+  }
+  return clean;
+};
+
+export const getUserBio = async (): Promise<string> => {
+  try {
+    const raw = await AsyncStorage.getItem(USER_BIO_KEY);
+    if (raw) return trimBio(raw);
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const ls = window.localStorage.getItem('compass_user_bio');
+      if (ls) return trimBio(ls);
+    } catch {
+      // ignore
+    }
+  }
+  return '';
+};
+
+export const setUserBio = async (bio: string): Promise<string> => {
+  const clean = trimBio(bio);
+  if (clean.length === 0) {
+    try {
+      await AsyncStorage.removeItem(USER_BIO_KEY);
+    } catch {
+      // ignore
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem('compass_user_bio');
+      } catch {
+        // ignore
+      }
+    }
+    return '';
+  }
+  try {
+    await AsyncStorage.setItem(USER_BIO_KEY, clean);
+  } catch {
+    // ignore
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('compass_user_bio', clean);
+    } catch {
+      // ignore
+    }
+  }
+  return clean;
+};

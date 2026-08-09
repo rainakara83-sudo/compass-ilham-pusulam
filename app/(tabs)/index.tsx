@@ -53,6 +53,7 @@ import {
   FREE_NICHE_LIMIT,
   MonthlyUsage,
   UserPlan,
+  getUserName,
 } from '../../services/storage';
 import { NicheId, WeeklyIdea, pickWeeklyIdeasFromPool, isWeekend, getBestTimeForToday, formatHHMM, formatDuration, formatLongDate, NICHE_TIME_BOOST } from '../../services/contentService';
 import { generateWeeklyIdeasWithAIResult, isPoolFallbackAvailable, callAI } from '../../services/aiService';
@@ -68,6 +69,7 @@ import PaywallModal from '../../components/PaywallModal';
 import PWAInstallBanner from '../../components/PWAInstallBanner';
 import PageHint from '../../components/PageHint';
 import { radius } from '../../styles/radius';
+import { useTheme } from '../../services/theme';
 import { typography } from '../../styles/typography';
 import { shadows } from '../../styles/shadows';
 
@@ -82,6 +84,7 @@ const getWeekId = (d: Date) => {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { isDark } = useTheme();
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [nichePickerOpen, setNichePickerOpen] = useState(false);
   const [goalPickerOpen, setGoalPickerOpen] = useState(false);
@@ -117,6 +120,7 @@ export default function HomeScreen() {
   const [dailyCardText, setDailyCardText] = useState<string | null>(null);
   const [now, setNow] = useState<Date>(new Date());
   const todayDateKey = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [userName, setUserNameState] = useState('');
 
   const weekId = useMemo(() => getWeekId(new Date()), []);
   const weekend = useMemo(() => isWeekend(new Date()), []);
@@ -324,13 +328,15 @@ export default function HomeScreen() {
       loadTodayPlan();
       loadDailyCard();
       (async () => {
-        const [p, u, active] = await Promise.all([
+        const [p, u, active, uname] = await Promise.all([
           getUserPlan(),
           getMonthlyUsage(),
           getActiveNiche(),
+          getUserName(),
         ]);
         setUserPlan(p);
         setUsage(u);
+        setUserNameState(uname);
         if (active && active !== niche) {
           setNiche(active);
           setIdeas([]);
@@ -587,7 +593,11 @@ export default function HomeScreen() {
         <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
           <View style={styles.welcomeWrap}>
             <Text style={styles.welcomeEmoji}>🧭</Text>
-            <Text style={styles.welcomeTitle}>{t('home.welcomeTitle', 'Hoş geldin!')}</Text>
+            <Text style={styles.welcomeTitle}>
+              {userName
+                ? t('home.welcomeWithName', { name: userName })
+                : t('home.welcomeTitle', 'Hoş geldin!')}
+            </Text>
             <Text style={styles.welcomeSub}>{t('home.welcomeSub', 'İlham almak için bir niş seç — haftalık fikirler burada hazır olacak.')}</Text>
             <Pressable
               onPress={openNichePicker}
@@ -626,6 +636,11 @@ export default function HomeScreen() {
       <PageHint hintId="home" title={t('pageHints.home.title')} description={t('pageHints.home.desc')} />
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
+          {userName ? (
+            <Text style={[styles.greeting, { color: isDark ? '#A8C8FF' : '#4D96FF' }]}>
+              {t('home.greeting', { name: userName })} 👋
+            </Text>
+          ) : null}
           <Text style={styles.title}>{t('home.weeklyTitle')}</Text>
           <Text style={styles.subtitle}>{t('home.weeklySubtitle', { count: ideas.length })}</Text>
         </View>
@@ -1404,6 +1419,11 @@ const styles = StyleSheet.create({
     color: lightColors.text,
     marginTop: 4,
     textAlign: 'center',
+  },
+  greeting: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   headerRow: {
     flexDirection: 'row',

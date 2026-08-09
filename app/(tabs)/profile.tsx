@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import niches from '../../data/niches.json';
@@ -21,8 +21,12 @@ import {
   getStoredNiches,
   getStreak,
   getStreakBest,
+  getUserBio,
+  getUserName,
   removeStoredNiche,
   setActiveNiche,
+  setUserBio,
+  setUserName,
 } from '../../services/storage';
 import { NicheImage } from '../../components/NicheImage';
 import PlanBadge from '../../components/PlanBadge';
@@ -160,10 +164,15 @@ export default function ProfileScreen() {
   const [nextPlanned, setNextPlanned] = useState<{ text: string; date: string } | null>(null);
   const [planRefresh, setPlanRefresh] = useState(0);
   const [toastBadge, setToastBadge] = useState<AchievementBadge | null>(null);
+  const [userName, setUserNameState] = useState('');
+  const [userBio, setUserBioState] = useState('');
+  const [nameDraft, setNameDraft] = useState('');
+  const [bioDraft, setBioDraft] = useState('');
+  const [savedToast, setSavedToast] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [list, active, e, g, s, st, favs, done, best, joined, sched] = await Promise.all([
+      const [list, active, e, g, s, st, favs, done, best, joined, sched, uname, ubio] = await Promise.all([
         getStoredNiches(),
         getActiveNiche(),
         getExperience(),
@@ -175,6 +184,8 @@ export default function ProfileScreen() {
         getStreakBest(),
         getAccountCreatedAt(),
         getSchedule(),
+        getUserName(),
+        getUserBio(),
       ]);
       setNichesList(list);
       setNiche(active ?? list[0] ?? null);
@@ -186,6 +197,10 @@ export default function ProfileScreen() {
       setDoneCount(done.length);
       setStreakBest(best);
       setJoinedAt(joined);
+      setUserNameState(uname);
+      setUserBioState(ubio);
+      setNameDraft(uname);
+      setBioDraft(ubio);
       const today = new Date().toISOString().slice(0, 10);
       const upcoming = sched.filter((e) => !e.done && e.date >= today).sort((a, b) => a.date.localeCompare(b.date));
       setPlanStats({
@@ -221,7 +236,22 @@ export default function ProfileScreen() {
     ? Math.min(100, Math.round((streak / Math.max(1, memberDays)) * 100))
     : 0;
 
-  const initials = niche ? niche.slice(0, 2).toUpperCase() : 'CC';
+  const initials = userName
+    ? userName.trim().slice(0, 2).toUpperCase()
+    : niche
+    ? niche.slice(0, 2).toUpperCase()
+    : 'CC';
+
+  const onSavePersonal = async () => {
+    const cleanedName = await setUserName(nameDraft);
+    const cleanedBio = await setUserBio(bioDraft);
+    setUserNameState(cleanedName);
+    setUserBioState(cleanedBio);
+    setNameDraft(cleanedName);
+    setBioDraft(cleanedBio);
+    setSavedToast(true);
+    setTimeout(() => setSavedToast(false), 2200);
+  };
 
   const onChangeNiche = () => {
     if (!niche) {
@@ -313,8 +343,46 @@ export default function ProfileScreen() {
             <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('profile.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('profile.subtitle')}</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>
+            {userName ? t('profile.greetingWithName', { name: userName }) : t('profile.subtitle')}
+          </Text>
         </View>
+      </View>
+
+      <Text style={styles.section}>👤 {t('profile.personalInfo')}</Text>
+      <View style={styles.personalCard}>
+        <Text style={styles.fieldLabel}>{t('profile.nameLabel')}</Text>
+        <TextInput
+          value={nameDraft}
+          onChangeText={(v) => setNameDraft(v.slice(0, 30))}
+          placeholder={t('profile.namePlaceholder')}
+          placeholderTextColor="#9CA3AF"
+          maxLength={30}
+          style={styles.input}
+          autoCapitalize="words"
+          autoCorrect={false}
+          returnKeyType="next"
+        />
+        <Text style={styles.fieldHint}>{nameDraft.length}/30</Text>
+
+        <Text style={[styles.fieldLabel, { marginTop: 12 }]}>{t('profile.bioLabel')}</Text>
+        <TextInput
+          value={bioDraft}
+          onChangeText={(v) => setBioDraft(v.slice(0, 200))}
+          placeholder={t('profile.bioPlaceholder')}
+          placeholderTextColor="#9CA3AF"
+          maxLength={200}
+          multiline
+          style={[styles.input, styles.textarea]}
+        />
+        <Text style={styles.fieldHint}>{bioDraft.length}/200</Text>
+
+        <Pressable onPress={onSavePersonal} style={styles.saveBtn}>
+          <Text style={styles.saveBtnText}>{t('profile.save')}</Text>
+        </Pressable>
+        {savedToast && (
+          <Text style={styles.savedToast}>{t('profile.saved')}</Text>
+        )}
       </View>
 
       <Text style={styles.section}>🌍 {t('settings.language')}</Text>
@@ -943,4 +1011,61 @@ const styles = StyleSheet.create({
   nextBadgeIcon: { fontSize: 22 },
   nextBadgeTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   nextBadgeSub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  personalCard: {
+    backgroundColor: 'white',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#374151',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '600',
+  },
+  textarea: {
+    minHeight: 70,
+    textAlignVertical: 'top',
+  },
+  fieldHint: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'right',
+  },
+  saveBtn: {
+    marginTop: 12,
+    backgroundColor: '#4D96FF',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveBtnText: { color: 'white', fontWeight: '800', fontSize: 14 },
+  savedToast: {
+    marginTop: 8,
+    color: '#10B981',
+    fontWeight: '700',
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });
