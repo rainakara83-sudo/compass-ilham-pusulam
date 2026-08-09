@@ -219,7 +219,7 @@ export default function RemindersScreen() {
     <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <PageHint hintId="reminders" title={t('pageHints.reminders.title')} description={t('pageHints.reminders.desc')} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.title}>{t('reminders.title')}</Text>
+        <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('reminders.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
 

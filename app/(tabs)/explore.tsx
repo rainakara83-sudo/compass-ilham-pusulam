@@ -102,10 +102,10 @@ export default function ExploreScreen() {
       <PageHint hintId="explore" title={t('pageHints.explore.title')} description={t('pageHints.explore.desc')} />
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={styles.title}>🔍 {t('explore.title')}</Text>
+          <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>🔍 {t('explore.title')}</Text>
           <PlanBadge size="sm" refreshKey={planRefresh} />
         </View>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>
           {t('explore.nicheCount', { niche: t(`niches.${niche}`, niche), count: items.length })}
         </Text>
         <View style={styles.searchRow}>

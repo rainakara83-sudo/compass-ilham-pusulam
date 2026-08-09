@@ -128,10 +128,10 @@ export default function FavoritesScreen() {
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>⭐ {t('favorites.title')}</Text>
+            <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>⭐ {t('favorites.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>{t('favorites.subtitle', { count: items.length })}</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('favorites.subtitle', { count: items.length })}</Text>
         </View>
         {items.length > 0 && (
           <Pressable

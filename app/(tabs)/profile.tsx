@@ -310,10 +310,10 @@ export default function ProfileScreen() {
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>{t('profile.title')}</Text>
+            <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('profile.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>{t('profile.subtitle')}</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('profile.subtitle')}</Text>
         </View>
       </View>
 

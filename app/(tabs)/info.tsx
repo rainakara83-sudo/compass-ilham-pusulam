@@ -67,10 +67,10 @@ export default function InfoScreen() {
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.title}>{t('info.title')}</Text>
+            <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('info.title')}</Text>
             <PlanBadge size="sm" refreshKey={planRefresh} />
           </View>
-          <Text style={styles.subtitle}>{t('info.subtitle')}</Text>
+          <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('info.subtitle')}</Text>
         </View>
       </View>
 

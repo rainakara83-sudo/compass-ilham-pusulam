@@ -194,10 +194,10 @@ export default function CalendarScreen() {
     <ScrollView style={[styles.container, { backgroundColor: isDark ? '#0B1220' : '#5C6B4F' }]} contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
       <PageHint hintId="calendar" title={t('pageHints.calendar.title')} description={t('pageHints.calendar.desc')} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.title}>📅 {t('calendar.title')}</Text>
+        <Text style={[styles.title, { color: isDark ? '#FAFCF6' : '#111827' }]}>📅 {t('calendar.title')}</Text>
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
-      <Text style={styles.subtitle}>{t('calendar.subtitle')}</Text>
+      <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('calendar.subtitle')}</Text>
 
       <Pressable onPress={() => router.push('/weekly-planner')} style={styles.weekPlannerBtn}>
         <View style={{ flex: 1 }}>
