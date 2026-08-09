@@ -62,6 +62,7 @@ export default function CalendarScreen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [niche, setNiche] = useState<NicheId | null>(null);
   const [planRefresh, setPlanRefresh] = useState(0);
+  const [view, setView] = useState<'calendar' | 'reminders'>('calendar');
 
   const load = useCallback(async () => {
     const [list, monthList, st, favs, n] = await Promise.all([
@@ -198,6 +199,44 @@ export default function CalendarScreen() {
         <PlanBadge size="sm" refreshKey={planRefresh} />
       </View>
       <Text style={[styles.subtitle, { color: isDark ? '#CBD5E1' : '#6B7280' }]}>{t('calendar.subtitle')}</Text>
+
+      <View style={[styles.subTabBar, { backgroundColor: isDark ? '#1E293B' : 'white', borderColor: isDark ? '#334155' : '#E5E7EB' }]}>
+        <Pressable
+          onPress={() => setView('calendar')}
+          style={[
+            styles.subTab,
+            view === 'calendar' && {
+              backgroundColor: isDark ? '#60A5FA22' : '#4D96FF22',
+              borderColor: isDark ? '#60A5FA' : '#4D96FF',
+            },
+          ]}
+        >
+          <Text style={[styles.subTabLabel, { color: view === 'calendar' ? (isDark ? '#60A5FA' : '#4D96FF') : (isDark ? '#CBD5E1' : '#6B7280'), fontWeight: view === 'calendar' ? '800' : '700' }]}>
+            📅 {t('calendar.tabCalendar')}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setView('reminders')}
+          style={[
+            styles.subTab,
+            view === 'reminders' && {
+              backgroundColor: isDark ? '#60A5FA22' : '#4D96FF22',
+              borderColor: isDark ? '#60A5FA' : '#4D96FF',
+            },
+          ]}
+        >
+          <Text style={[styles.subTabLabel, { color: view === 'reminders' ? (isDark ? '#60A5FA' : '#4D96FF') : (isDark ? '#CBD5E1' : '#6B7280'), fontWeight: view === 'reminders' ? '800' : '700' }]}>
+            🔔 {t('calendar.tabReminders')}
+          </Text>
+        </Pressable>
+      </View>
+
+      {view === 'reminders' ? (
+        <RemindersView
+          schedule={schedule}
+          isDark={isDark}
+        />
+      ) : null}
 
       <Pressable onPress={() => router.push('/weekly-planner')} style={styles.weekPlannerBtn}>
         <View style={{ flex: 1 }}>
@@ -468,11 +507,111 @@ export default function CalendarScreen() {
   );
 }
 
+function RemindersView(props: { schedule: ScheduleEntry[]; isDark: boolean }) {
+  const { schedule, isDark } = props;
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const upcoming = schedule
+    .filter((e) => !e.done && e.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 8);
+  const todayItems = schedule.filter((e) => e.date === today && !e.done);
+  const tomorrowItems = schedule.filter((e) => e.date === tomorrow && !e.done);
+  const cardBg = isDark ? '#1E293B' : 'white';
+  const borderColor = isDark ? '#334155' : '#E5E7EB';
+  const textColor = isDark ? '#FAFCF6' : '#111827';
+  const subText = isDark ? '#CBD5E1' : '#6B7280';
+  const accent = isDark ? '#60A5FA' : '#4D96FF';
+
+  return (
+    <View>
+      <View style={[styles.reminderCard, { backgroundColor: cardBg, borderColor }]}>
+        <Text style={[styles.reminderTitle, { color: textColor }]}>📆 Bugün</Text>
+        {todayItems.length === 0 ? (
+          <Text style={[styles.reminderEmpty, { color: subText }]}>Bugün için planlanmış hatırlatıcı yok.</Text>
+        ) : (
+          todayItems.map((e) => (
+            <View key={e.id} style={[styles.reminderItem, { borderColor }]}>
+              <Text style={[styles.reminderItemText, { color: textColor }]}>{e.text}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={[styles.reminderCard, { backgroundColor: cardBg, borderColor }]}>
+        <Text style={[styles.reminderTitle, { color: textColor }]}>⏭ Yarın</Text>
+        {tomorrowItems.length === 0 ? (
+          <Text style={[styles.reminderEmpty, { color: subText }]}>Yarın için planlanmış hatırlatıcı yok.</Text>
+        ) : (
+          tomorrowItems.map((e) => (
+            <View key={e.id} style={[styles.reminderItem, { borderColor }]}>
+              <Text style={[styles.reminderItemText, { color: textColor }]}>{e.text}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={[styles.reminderCard, { backgroundColor: cardBg, borderColor }]}>
+        <Text style={[styles.reminderTitle, { color: textColor }]}>🗓 Yaklaşan ({upcoming.length})</Text>
+        {upcoming.length === 0 ? (
+          <Text style={[styles.reminderEmpty, { color: subText }]}>Yaklaşan hatırlatıcı yok.</Text>
+        ) : (
+          upcoming.map((e) => (
+            <View key={e.id} style={[styles.reminderItem, { borderColor }]}>
+              <Text style={[styles.reminderDate, { color: accent }]}>{e.date}</Text>
+              <Text style={[styles.reminderItemText, { color: textColor }]}>{e.text}</Text>
+            </View>
+          ))
+        )}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#5C6B4F' },
   title: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 50 },
   subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  subTabBar: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+    marginBottom: 14,
+  },
+  subTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  subTabActive: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  subTabLabel: { fontSize: 13 },
+  reminderCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  reminderTitle: { fontSize: 14, fontWeight: '800', marginBottom: 8 },
+  reminderEmpty: { fontSize: 12, fontStyle: 'italic', paddingVertical: 6 },
+  reminderItem: {
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  reminderItemText: { fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  reminderDate: { fontSize: 11, fontWeight: '800', marginBottom: 2 },
   weekPlannerBtn: {
     flexDirection: 'row',
     alignItems: 'center',

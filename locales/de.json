@@ -18,15 +18,17 @@
   "tabs": {
     "home": "Start",
     "explore": "Entdecken",
-    "favorites": "Favoriten",
-    "history": "Verlauf",
-    "stats": "Statistik",
-    "reminders": "Erinnerungen",
-    "qa": "Q&A",
+    "library": "Bibliothek",
     "profile": "Profil",
-    "calendar": "Kalender",
-    "info": "Info",
-    "settings": "Einstellungen"
+    "calendar": "Kalender"
+  },
+  "library": {
+    "title": "Meine Ideenbibliothek",
+    "tabFavorites": "Favoriten",
+    "tabHistory": "Verlauf",
+    "tabPacks": "Pakete",
+    "emptyFavorites": "Noch keine Favoriten",
+    "emptyHistory": "Noch kein Verlauf"
   },
   "weekdays": {
     "mon": "Mon",
@@ -978,6 +980,8 @@
   },
   "calendar": {
     "title": "Content-Kalender",
+    "tabCalendar": "Kalender",
+    "tabReminders": "Erinnerungen",
     "addIdeaPlaceholder": "Idee für diesen Tag hinzufügen...",
     "ideaPlaceholder": "Ideentext...",
     "emptyAlertTitle": "Leere Idee",

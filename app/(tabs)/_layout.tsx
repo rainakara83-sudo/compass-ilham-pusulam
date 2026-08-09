@@ -8,15 +8,9 @@ import { useTheme } from '../../services/theme';
 const TAB_ICONS: Record<string, string> = {
   index: '🧭',
   explore: '🔍',
-  favorites: '★',
-  history: '⏱',
-  stats: '📊',
-  reminders: '🔔',
-  qa: '💬',
-  profile: '👤',
+  library: '📚',
   calendar: '📅',
-  info: 'ℹ️',
-  settings: '⚙️',
+  profile: '👤',
 };
 
 export default function TabsLayout() {
@@ -124,45 +118,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="favorites"
+        name="library"
         options={{
-          title: t('tabs.favorites'),
-          tabBarLabel: ({ focused }) => renderLabel('favorites', t('tabs.favorites'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: t('tabs.history'),
-          tabBarLabel: ({ focused }) => renderLabel('history', t('tabs.history'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: t('tabs.stats'),
-          tabBarLabel: ({ focused }) => renderLabel('stats', t('tabs.stats'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="reminders"
-        options={{
-          title: t('tabs.reminders'),
-          tabBarLabel: ({ focused }) => renderLabel('reminders', t('tabs.reminders'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="qa"
-        options={{
-          title: t('tabs.qa'),
-          tabBarLabel: ({ focused }) => renderLabel('qa', t('tabs.qa'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: t('tabs.profile'),
-          tabBarLabel: ({ focused }) => renderLabel('profile', t('tabs.profile'), focused),
+          title: t('tabs.library'),
+          tabBarLabel: ({ focused }) => renderLabel('library', t('tabs.library'), focused),
         }}
       />
       <Tabs.Screen
@@ -173,17 +132,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="info"
+        name="profile"
         options={{
-          title: t('tabs.info'),
-          tabBarLabel: ({ focused }) => renderLabel('info', t('tabs.info'), focused),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: t('tabs.settings'),
-          tabBarLabel: ({ focused }) => renderLabel('settings', t('tabs.settings'), focused),
+          title: t('tabs.profile'),
+          tabBarLabel: ({ focused }) => renderLabel('profile', t('tabs.profile'), focused),
         }}
       />
     </Tabs>

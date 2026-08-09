@@ -18,15 +18,17 @@
   "tabs": {
     "home": "Ana Sayfa",
     "explore": "Keşfet",
-    "favorites": "Favoriler",
-    "history": "Geçmiş",
-    "stats": "İstatistik",
-    "reminders": "Hatırlatmalar",
-    "qa": "Soru-Cevap",
+    "library": "Kütüphane",
     "profile": "Profil",
-    "calendar": "Takvim",
-    "info": "Bilgi",
-    "settings": "Ayarlar"
+    "calendar": "Takvim"
+  },
+  "library": {
+    "title": "Fikir Kütüphanem",
+    "tabFavorites": "Favoriler",
+    "tabHistory": "Geçmiş",
+    "tabPacks": "Paketler",
+    "emptyFavorites": "Henüz favori yok",
+    "emptyHistory": "Henüz geçmiş yok"
   },
   "onboarding": {
     "slide1Badge": "HOŞ GELDİN",
@@ -978,6 +980,8 @@
   },
   "calendar": {
     "title": "İçerik Takvimi",
+    "tabCalendar": "Takvim",
+    "tabReminders": "Hatırlatıcılar",
     "addIdeaPlaceholder": "Bu güne fikir ekle...",
     "ideaPlaceholder": "Fikir metni...",
     "emptyAlertTitle": "Boş fikir",

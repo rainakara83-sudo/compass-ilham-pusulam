@@ -18,15 +18,17 @@
   "tabs": {
     "home": "Home",
     "explore": "Explore",
-    "favorites": "Favorites",
-    "history": "History",
-    "stats": "Stats",
-    "reminders": "Reminders",
-    "qa": "Q&A",
+    "library": "Library",
     "profile": "Profile",
-    "calendar": "Calendar",
-    "info": "Info",
-    "settings": "Settings"
+    "calendar": "Calendar"
+  },
+  "library": {
+    "title": "My Idea Library",
+    "tabFavorites": "Favorites",
+    "tabHistory": "History",
+    "tabPacks": "Packs",
+    "emptyFavorites": "No favorites yet",
+    "emptyHistory": "No history yet"
   },
   "weekdays": {
     "mon": "Mon",
@@ -978,6 +980,8 @@
   },
   "calendar": {
     "title": "Content Calendar",
+    "tabCalendar": "Calendar",
+    "tabReminders": "Reminders",
     "addIdeaPlaceholder": "Add an idea for this day...",
     "ideaPlaceholder": "Idea text...",
     "emptyAlertTitle": "Empty idea",

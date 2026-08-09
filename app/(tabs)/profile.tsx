@@ -623,6 +623,34 @@ export default function ProfileScreen() {
         <Text style={styles.commentsArrow}>›</Text>
       </Pressable>
 
+      <Text style={styles.section}>{t('profile.quickAccess', 'Hızlı Erişim')}</Text>
+      <View style={styles.quickGrid}>
+        <Pressable onPress={() => router.push('/hashtags')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>#️⃣</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('hashtags.title', 'Hashtag\'ler')}</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/hooks')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>🪝</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('hooks.title', 'Hook\'lar')}</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/comments')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>💬</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('comments.title', 'Yorumlar')}</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/collections')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>📚</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('collections.title', 'Koleksiyonlar')}</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/(tabs)/calendar')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>🔔</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('calendar.tabReminders', 'Hatırlatıcılar')}</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/idea-bank')} style={[styles.quickCard, { borderColor: isDark ? '#334155' : '#E5E7EB', backgroundColor: isDark ? '#1E293B' : 'white' }]}>
+          <Text style={styles.quickEmoji}>💡</Text>
+          <Text style={[styles.quickTitle, { color: isDark ? '#FAFCF6' : '#111827' }]}>{t('ideaBank.title', 'Fikir Bankası')}</Text>
+        </Pressable>
+      </View>
+
       <BadgeGrid />
 
       <Text style={styles.section}>{t('profile.sectionJourney')}</Text>
@@ -659,11 +687,11 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.actions}>
-        <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/(tabs)/stats')}>
-          <Text style={styles.btnAltText}>{t('profile.btnStats')}</Text>
+        <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/weekly-planner')}>
+          <Text style={styles.btnAltText}>{t('profile.btnStats', 'Haftalık Plan')}</Text>
         </Pressable>
-        <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/(tabs)/settings')}>
-          <Text style={styles.btnAltText}>{t('profile.btnSettings')}</Text>
+        <Pressable style={[styles.btn, styles.btnAlt]} onPress={() => router.push('/pricing')}>
+          <Text style={styles.btnAltText}>{t('profile.btnSettings', 'Pro\'ya Geç')}</Text>
         </Pressable>
       </View>
 
@@ -1068,4 +1096,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
+  quickGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  quickCard: {
+    width: '48%',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  quickEmoji: { fontSize: 26, marginBottom: 6 },
+  quickTitle: { fontSize: 13, fontWeight: '800' },
 });
